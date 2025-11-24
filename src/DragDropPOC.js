@@ -309,6 +309,19 @@ const DragDropPOC = ({ jobData }) => {
     items: thumbsByType[key], // always exists
   }));
 
+  const getFilteredCount = () => {
+    if (selectedFilter === "All files") return allThumbs.length;
+    if (selectedFilter === "Job Files")
+      return allThumbs.filter((t) => t.type === "job").length;
+    if (selectedFilter === "References")
+      return allThumbs.filter((t) => t.type === "reference").length;
+    if (selectedFilter === "Deliverables")
+      return allThumbs.filter((t) => t.type === "deliverable").length;
+    if (selectedFilter === "Extras")
+      return allThumbs.filter((t) => t.type === "extra").length;
+    return 0;
+  };
+
   return (
     <Box
       sx={{
@@ -341,7 +354,6 @@ const DragDropPOC = ({ jobData }) => {
           gap: 4, // 👍 Optional: adds spacing between the two images
         }}
       >
-  
         {/* dashed preview drop divider */}
         {isDragOver && (
           <Box
@@ -358,7 +370,7 @@ const DragDropPOC = ({ jobData }) => {
         )}
 
         {/* SIDE-BY-SIDE VIEW */}
-        { sideBySideRef && (
+        {sideBySideRef && (
           <>
             {/* LEFT */}
             {/* LEFT IMAGE */}
@@ -458,7 +470,7 @@ const DragDropPOC = ({ jobData }) => {
         )}
 
         {/* SINGLE VIEW */}
-        { !sideBySideRef && previewThumb && (
+        {!sideBySideRef && previewThumb && (
           // <Box
           //   sx={{
           //     maxWidth: "100%",
@@ -470,50 +482,50 @@ const DragDropPOC = ({ jobData }) => {
           //     overflow: "hidden",
           //   }}
           // >
-            <Box
-              sx={{
-                position: "relative",
+          <Box
+            sx={{
+              position: "relative",
+              maxWidth: "100%",
+              maxHeight: "100%",
+              width: "auto",
+              height: "auto",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <img
+              src={previewThumb.src}
+              alt={previewThumb.name}
+              style={{
                 maxWidth: "100%",
                 maxHeight: "100%",
-                width: "auto",
-                height: "auto",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
+                objectFit: "contain",
+                display: "block",
+              }}
+            />
+
+            {/* LABEL INSIDE IMAGE */}
+            <Box
+              sx={{
+                position: "absolute",
+                bottom: 12,
+                left: 12,
+                background: "#ffffffdd",
+                padding: "4px 10px",
+                borderRadius: "10px",
+                fontSize: 14,
+                color: "#1a73e8",
+                fontWeight: 600,
+                backdropFilter: "blur(4px)",
+                zIndex: 5,
+                pointerEvents: "none",
               }}
             >
-              <img
-                src={previewThumb.src}
-                alt={previewThumb.name}
-                style={{
-                  maxWidth: "100%",
-                  maxHeight: "100%",
-                  objectFit: "contain",
-                  display: "block",
-                }}
-              />
-
-              {/* LABEL INSIDE IMAGE */}
-              <Box
-                sx={{
-                  position: "absolute",
-                  bottom: 12,
-                  left: 12,
-                  background: "#ffffffdd",
-                  padding: "4px 10px",
-                  borderRadius: "10px",
-                  fontSize: 14,
-                  color: "#1a73e8",
-                  fontWeight: 600,
-                  backdropFilter: "blur(4px)",
-                  zIndex: 5,
-                  pointerEvents: "none",
-                }}
-              >
-                {previewThumb.name}
-              </Box>
+              {previewThumb.name}
             </Box>
-        //  </Box>
+          </Box>
+          //  </Box>
         )}
       </Box>
 
@@ -534,7 +546,9 @@ const DragDropPOC = ({ jobData }) => {
         }}
       >
         <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
-          {isStackView ? "All Related Files" : selectedFilter}
+          {isStackView
+            ? `All Related Files (${getFilteredCount()})`
+            : `${selectedFilter} (${getFilteredCount()})`}
         </Typography>
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
