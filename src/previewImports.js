@@ -1,26 +1,64 @@
-// PREVIEW IMAGES — CLEANED BASED ON EXISTING FILES ONLY
+// previewImports.js
 
-import img1 from "./assets/preview/0f1a5772-d805-45d7-a104-960b5f632f7a.jpg";
-import img2 from "./assets/preview/1eba9101-86ca-4c7b-ae6c-e7181914aaf6.jpg";
-import img3 from "./assets/preview/2dd1b96a-1db5-4a4f-8ee1-279ff9b84dc8.jpg";
-import img4 from "./assets/preview/3b4afa7f-9f81-410e-817f-32e7312a223c.jpg";
-import img5 from "./assets/preview/3e8dc40b-3ef8-4236-aad5-c10f3dd54469.jpg";
-import img6 from "./assets/preview/4a2bb811-0c6c-4227-8dea-f66646ee0169.jpg";
-import img7 from "./assets/preview/4a54ffe6-8f85-403e-b211-5478fb40beb1.jpg";
-import img8 from "./assets/preview/5a5f5dfa-51e7-4ee7-a681-936ab629efac.jpg";
-import img9 from "./assets/preview/8b3462d3-70f9-444a-97b7-b50bde6d144e.jpg"; 
-import img10 from "./assets/preview/64ed9be9-760a-4bfb-9032-27d4ae5f94d7.jpg";
-import img11 from "./assets/preview/214e2e14-3ff0-459d-9bdf-eb8fb60e6638.jpg";
-import img12 from "./assets/preview/396e7075-6078-4489-a5f7-0aa490bcc185.jpg";
-import img13 from "./assets/preview/0f1a5772-d805-45d7-a104-960b5f632f7a.jpg";
-import img14 from "./assets/preview/1eba9101-86ca-4c7b-ae6c-e7181914aaf6.jpg";
-import img15 from "./assets/preview/2dd1b96a-1db5-4a4f-8ee1-279ff9b84dc8.jpg";
-import img16 from "./assets/preview/3b4afa7f-9f81-410e-817f-32e7312a223c.jpg";
-import img17 from "./assets/preview/3e8dc40b-3ef8-4236-aad5-c10f3dd54469.jpg";
+// ======================================================
+// 📌 ALL IMPORTS MUST COME FIRST (ESLINT requirement)
+// ======================================================
 
-// FINAL ARRAY
-export const previewImages = [
-  img1, img2, img3, img4, img5,
-  img6, img7, img8, img9, img10,
-  img11, img12, img13, img14, img15, img16, img17
+// ---------------- JOB FILES (001–005) ----------------
+import job1 from "./assets/job-files/001.jpg";
+import job2 from "./assets/job-files/002.jpg";
+import job3 from "./assets/job-files/003.jpg";
+import job4 from "./assets/job-files/004.jpg";
+import job5 from "./assets/job-files/005.jpg";
+
+// ---------------- REFERENCES (001–014) ----------------
+import ref1 from "./assets/references/001.jpg";
+import ref2 from "./assets/references/002.jpg";
+import ref3 from "./assets/references/003.jpg";
+import ref4 from "./assets/references/004.jpg";
+import ref5 from "./assets/references/005.jpg";
+import ref6 from "./assets/references/006.jpg";
+import ref7 from "./assets/references/007.jpg";
+import ref8 from "./assets/references/008.jpg";
+import ref9 from "./assets/references/009.jpg";
+import ref10 from "./assets/references/010.jpg";
+import ref11 from "./assets/references/011.jpg";
+import ref12 from "./assets/references/012.jpg";
+import ref13 from "./assets/references/013.jpg";
+import ref14 from "./assets/references/014.jpg";
+import ref15 from "./assets/references/015.jpg";
+import ref16 from "./assets/references/016.jpg";
+
+// ---------------- DELIVERABLES (001–016) ----------------
+import del1 from "./assets/deliverables/001.jpg";
+import del2 from "./assets/deliverables/002.jpg";
+import del3 from "./assets/deliverables/003.jpg";
+import del4 from "./assets/deliverables/004.jpg";
+import del5 from "./assets/deliverables/005.jpg";
+import del6 from "./assets/deliverables/006.jpg";
+import del7 from "./assets/deliverables/007.jpg";
+import del8 from "./assets/deliverables/008.jpg";
+import del9 from "./assets/deliverables/009.jpg";
+import del10 from "./assets/deliverables/010.jpg";
+import del11 from "./assets/deliverables/011.jpg";
+import del12 from "./assets/deliverables/012.jpg";
+import del13 from "./assets/deliverables/013.jpg";
+import del14 from "./assets/deliverables/014.jpg";
+import del15 from "./assets/deliverables/015.jpg";
+import del16 from "./assets/deliverables/016.jpg";
+
+// ======================================================
+// ✅ EXPORT ARRAYS — (after imports only, allowed)
+// ======================================================
+
+export const jobFileImages = [job1, job2, job3, job4, job5];
+
+export const referenceImages = [
+  ref1, ref2, ref3, ref4, ref5, ref6, ref7,
+  ref8, ref9, ref10, ref11, ref12, ref13, ref14, ref15, ref16
+];
+
+export const deliverableImages = [
+  del1, del2, del3, del4, del5, del6, del7, del8,
+  del9, del10, del11, del12, del13, del14, del15, del16
 ];

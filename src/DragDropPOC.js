@@ -15,6 +15,7 @@ import CheckBoxOutlineBlankIcon from "@mui/icons-material/CheckBoxOutlineBlank";
 import CheckBoxIcon from "@mui/icons-material/CheckBox";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
+import Switch from "@mui/material/Switch";
 
 import ViewLogo from "./assets/logos/view-logo.png";
 import LayersLogo from "./assets/logos/layers-logo.png";
@@ -46,7 +47,6 @@ const DragDropPOC = ({ jobData }) => {
   const [thumbs, setThumbs] = useState(buildThumbs);
 
   const [checked, setChecked] = useState([]);
-  const [clickedFull, setClickedFull] = useState(null);
   const [sideBySideRef, setSideBySideRef] = useState(null);
 
   const viewRef = useRef(null);
@@ -58,6 +58,7 @@ const DragDropPOC = ({ jobData }) => {
   const [selectedFilter, setSelectedFilter] = useState("All files");
 
   const [isStackView, setIsStackView] = useState(false);
+  const [collapseStack, setCollapseStack] = useState(false);
 
   const fileFilters = [
     "All files",
@@ -136,7 +137,7 @@ const DragDropPOC = ({ jobData }) => {
         // drop on left → replace preview
         setPreviewId(dragged.id);
       }
-      setClickedFull(null);
+      // setClickedFull(null);
       dragItemRef.current = null;
       return;
     }
@@ -149,19 +150,13 @@ const DragDropPOC = ({ jobData }) => {
       setPreviewId(dragged.id);
     }
 
-    setClickedFull(null);
+    // setClickedFull(null);
     dragItemRef.current = null;
   };
 
   const onThumbClick = (thumb) => {
-    setClickedFull(null);
     setSideBySideRef(null);
     setPreviewId(thumb.id);
-  };
-
-  const exitFull = () => {
-    setClickedFull(null);
-    setSideBySideRef(null);
   };
 
   // horizontal wheel -> scroll thumbnails (only used in carousel)
@@ -346,58 +341,7 @@ const DragDropPOC = ({ jobData }) => {
           gap: 4, // 👍 Optional: adds spacing between the two images
         }}
       >
-        {/* FULL VIEW */}
-        {clickedFull && (
-          <Box
-            onDoubleClick={exitFull}
-            sx={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              overflow: "hidden",
-            }}
-          >
-            <Box
-              sx={{
-                position: "relative",
-                display: "inline-block",
-                maxWidth: "100%",
-                maxHeight: "100%",
-              }}
-            >
-              <img
-                src={getThumbById(clickedFull)?.src}
-                style={{
-                  maxWidth: "100%",
-                  maxHeight: "100%",
-                  objectFit: "contain",
-                  display: "block",
-                }}
-              />
-
-              {/* FILE NAME ALWAYS INSIDE IMAGE */}
-              <Box
-                sx={{
-                  position: "absolute",
-                  bottom: 12,
-                  left: 12,
-                  background: "#ffffffdd",
-                  padding: "4px 10px",
-                  borderRadius: "10px",
-                  fontSize: "14px",
-                  color: "#1a73e8",
-                  fontWeight: 600,
-                  backdropFilter: "blur(4px)",
-                  zIndex: 5,
-                }}
-              >
-                {getThumbById(clickedFull)?.name}
-              </Box>
-            </Box>
-          </Box>
-        )}
-
+  
         {/* dashed preview drop divider */}
         {isDragOver && (
           <Box
@@ -414,94 +358,128 @@ const DragDropPOC = ({ jobData }) => {
         )}
 
         {/* SIDE-BY-SIDE VIEW */}
-        {!clickedFull && sideBySideRef && (
+        { sideBySideRef && (
           <>
             {/* LEFT */}
+            {/* LEFT IMAGE */}
             <Box
               sx={{
-                position: "relative",
-                maxWidth: "100%",
-                maxHeight: "100%",
+                flex: 1,
                 display: "flex",
-                alignItems: "center",
                 justifyContent: "center",
+                alignItems: "center",
               }}
             >
-              <img
-                src={previewThumb?.src}
-                style={{
-                  maxWidth: "100%",
-                  maxHeight: "100%",
-                  objectFit: "contain",
-                  display: "block",
-                }}
-              />
               <Box
                 sx={{
-                  position: "absolute",
-                  bottom: 12,
-                  left: 12,
-                  background: "#ffffffdd",
-                  padding: "4px 10px",
-                  borderRadius: "10px",
-                  color: "#1a73e8",
-                  fontWeight: 600,
+                  position: "relative",
+                  maxWidth: "100%",
+                  maxHeight: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                {previewThumb?.name}
+                <img
+                  src={previewThumb?.src}
+                  style={{
+                    maxWidth: "100%",
+                    maxHeight: "100%",
+                    objectFit: "contain",
+                    display: "block",
+                  }}
+                />
+
+                {/* LABEL ALWAYS INSIDE IMAGE */}
+                <Box
+                  sx={{
+                    position: "absolute",
+                    bottom: 12,
+                    left: 12,
+                    background: "#ffffffdd",
+                    padding: "4px 10px",
+                    borderRadius: "10px",
+                    color: "#1a73e8",
+                    fontWeight: 600,
+                  }}
+                >
+                  {previewThumb?.name}
+                </Box>
               </Box>
             </Box>
 
-            {/* RIGHT */}
+            {/* RIGHT IMAGE */}
             <Box
               sx={{
-                position: "relative",
-                maxWidth: "100%",
-                maxHeight: "100%",
+                flex: 1,
                 display: "flex",
-                alignItems: "center",
                 justifyContent: "center",
+                alignItems: "center",
               }}
             >
-              <img
-                src={getThumbById(sideBySideRef)?.src}
-                style={{
-                  maxWidth: "100%",
-                  maxHeight: "100%",
-                  objectFit: "contain",
-                  display: "block",
-                }}
-              />
               <Box
                 sx={{
-                  position: "absolute",
-                  bottom: 12,
-                  left: 12,
-                  background: "#ffffffdd",
-                  padding: "4px 10px",
-                  borderRadius: "10px",
-                  color: "#1a73e8",
-                  fontWeight: 600,
+                  position: "relative",
+                  maxWidth: "100%",
+                  maxHeight: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                {getThumbById(sideBySideRef)?.name}
+                <img
+                  src={getThumbById(sideBySideRef)?.src}
+                  style={{
+                    maxWidth: "100%",
+                    maxHeight: "100%",
+                    objectFit: "contain",
+                    display: "block",
+                  }}
+                />
+
+                {/* LABEL ALWAYS INSIDE IMAGE */}
+                <Box
+                  sx={{
+                    position: "absolute",
+                    bottom: 12,
+                    left: 12,
+                    background: "#ffffffdd",
+                    padding: "4px 10px",
+                    borderRadius: "10px",
+                    color: "#1a73e8",
+                    fontWeight: 600,
+                  }}
+                >
+                  {getThumbById(sideBySideRef)?.name}
+                </Box>
               </Box>
             </Box>
           </>
         )}
 
         {/* SINGLE VIEW */}
-        {!clickedFull && !sideBySideRef && previewThumb && (
-          <>
-            {/* IMPORTANT: wrapper must be relative */}
+        { !sideBySideRef && previewThumb && (
+          // <Box
+          //   sx={{
+          //     maxWidth: "100%",
+          //     maxHeight: "100%",
+          //     flex: "1 1 auto",
+          //     display: "flex",
+          //     justifyContent: "center",
+          //     alignItems: "center",
+          //     overflow: "hidden",
+          //   }}
+          // >
             <Box
               sx={{
                 position: "relative",
                 maxWidth: "100%",
                 maxHeight: "100%",
+                width: "auto",
+                height: "auto",
                 display: "flex",
-                alignItems: "center",
                 justifyContent: "center",
+                alignItems: "center",
               }}
             >
               <img
@@ -515,7 +493,7 @@ const DragDropPOC = ({ jobData }) => {
                 }}
               />
 
-              {/* filename INSIDE IMAGE */}
+              {/* LABEL INSIDE IMAGE */}
               <Box
                 sx={{
                   position: "absolute",
@@ -535,7 +513,7 @@ const DragDropPOC = ({ jobData }) => {
                 {previewThumb.name}
               </Box>
             </Box>
-          </>
+        //  </Box>
         )}
       </Box>
 
@@ -579,8 +557,8 @@ const DragDropPOC = ({ jobData }) => {
             <img src={BrLogo} style={{ width: "100%" }} />
           </IconButton>
 
-          {/* DROPDOWN */}
-          {!isStackView && (
+          {/* WHEN IN FILMSTRIP VIEW → SHOW DROPDOWN */}
+          {!isStackView ? (
             <Box>
               <Box
                 onClick={(e) => setAnchorEl(e.currentTarget)}
@@ -617,6 +595,17 @@ const DragDropPOC = ({ jobData }) => {
                   </MenuItem>
                 ))}
               </Menu>
+            </Box>
+          ) : (
+            /* WHEN IN STACK VIEW → SHOW COLLAPSE STACK TOGGLE */
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Switch
+                size="small"
+                checked={collapseStack}
+                onChange={(e) => setCollapseStack(e.target.checked)}
+              />
+
+              <Typography sx={{ fontSize: 12 }}>Collapse</Typography>
             </Box>
           )}
 
@@ -663,14 +652,20 @@ const DragDropPOC = ({ jobData }) => {
       {/* ======================================================
         STACK PANEL BELOW HEADER
     ======================================================= */}
+      {/* ======================================================
+      STACK VIEW — COMPACT LAYOUT (NO ACCORDION)
+======================================================= */}
       {isStackView && (
         <Box
           sx={{
-            height: "60%",
+            height: collapseStack ? 120 : "60%", // 🔥 MOVES DOWN/UP
             overflowY: "auto",
             background: "#fff",
             boxShadow: "0px -6px 18px rgba(0,0,0,0.12)",
             zIndex: 150,
+            px: 1,
+            py: 1,
+            transition: "height 0.25s ease-out",
           }}
         >
           {accordionConfig.map(({ key, label, items }) => (
@@ -678,13 +673,27 @@ const DragDropPOC = ({ jobData }) => {
               key={key}
               expanded={!!accordionsOpen[key]}
               onChange={handleAccordionToggle(key)}
+              disableGutters
+              elevation={0}
+              square
+              sx={{
+                mb: 1,
+                "&:before": { display: "none" }, // remove MUI divider line
+              }}
             >
+              {/* ====== MINIMAL HEADER ====== */}
               <AccordionSummary
-                expandIcon={<ExpandMoreIcon />}
+                expandIcon={<ExpandMoreIcon sx={{ fontSize: 18 }} />}
                 sx={{
-                  borderBottom: "1px solid #e0e0e0",
-                  minHeight: 48,
-                  "& .MuiAccordionSummary-content": { marginY: 1 },
+                  minHeight: "unset !important",
+                  px: 1,
+                  py: 0.5,
+                  "& .MuiAccordionSummary-content": {
+                    margin: 0,
+                    alignItems: "center",
+                    gap: 1,
+                  },
+                  borderBottom: "1px solid #E0E0E0",
                 }}
               >
                 <Checkbox
@@ -693,96 +702,87 @@ const DragDropPOC = ({ jobData }) => {
                     items.every((t) => checked.includes(t.id))
                   }
                   disabled={items.length === 0}
+                  size="small"
                   onClick={(e) => {
                     e.stopPropagation();
                     toggleAccordionCheck(key);
                   }}
-                  sx={{ mr: 1, p: 0 }}
+                  sx={{
+                    p: 0,
+                    "& .MuiSvgIcon-root": { fontSize: 18 },
+                  }}
                 />
-                <Typography sx={{ fontWeight: 600 }}>{label}</Typography>
+
+                <Typography sx={{ fontSize: "0.85rem", fontWeight: 600 }}>
+                  {label} ({items.length})
+                </Typography>
               </AccordionSummary>
 
-              <AccordionDetails>
-                {/* If NO images → show message */}
-                {thumbsByType[key].length === 0 ? (
-                  <Typography
-                    sx={{
-                      // p: 2,
-                      fontStyle: "italic",
-                      color: "#888",
-                      textAlign: "center",
-                      width: "100%",
-                    }}
-                  >
-                    No Images Available
-                  </Typography>
-                ) : (
-                  <Grid container spacing={2}>
-                    {thumbsByType[key].map((t) => (
-                      <Grid item xs={3} sm={2} md={2} key={t.id}>
-                        {/* CARD LAYOUT */}
+              {/* ====== MINIMAL CONTENT ====== */}
+              <AccordionDetails sx={{ px: 1, py: 1 }}>
+                <Grid container spacing={1}>
+                  {items.map((t) => (
+                    <Grid item xs={3} sm={2} md={2} key={t.id}>
+                      <Box
+                        draggable
+                        onDragStart={(e) => onDragStart(e, t)}
+                        onDragEnd={onDragEnd}
+                        onClick={() => onThumbClick(t)}
+                        sx={{
+                          width: 100, // 🔥 UPDATED
+                          borderRadius: 1,
+                          overflow: "hidden",
+                          position: "relative",
+                          cursor: "grab",
+                          border: checked.includes(t.id)
+                            ? "2px solid #5465FF"
+                            : "1px solid #ccc",
+                          background: "#fff",
+                          display: "flex",
+                          flexDirection: "column",
+                        }}
+                      >
+                        {/* IMAGE */}
                         <Box
-                          draggable
-                          onDragStart={(e) => onDragStart(e, t)}
-                          onDragEnd={onDragEnd}
-                          onClick={() => onThumbClick(t)}
                           sx={{
-                            width: 160,
-                            borderRadius: 1,
+                            width: "100%",
+                            height: 100, // 🔥 UPDATED
                             overflow: "hidden",
                             position: "relative",
-                            cursor: "grab",
-                            border: checked.includes(t.id)
-                              ? "2px solid #5465FF"
-                              : "2px solid transparent",
-                            background: "#fff",
-                            display: "flex",
-                            flexDirection: "column",
                           }}
                         >
-                          {/* IMAGE BLOCK */}
-                          <Box
-                            sx={{
+                          <img
+                            src={t.src}
+                            style={{
                               width: "100%",
-                              height: 160,
-                              overflow: "hidden",
-                              position: "relative",
+                              height: "100%",
+                              objectFit: "contain",
+                              display: "block",
                             }}
-                          >
-                            <img
-                              src={t.src}
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "fill",
-                                display: "block",
-                              }}
-                            />
+                          />
 
-                            {renderSmallCheckbox(t.id)}
-                          </Box>
-
-                          {/* LABEL BELOW IMAGE */}
-                          <Box
-                            sx={{
-                              width: "100%",
-                              background: "#f9f9faff",
-                              padding: "6px 8px",
-                              textAlign: "left",
-                              fontSize: 12,
-                              color: "#000",
-                              fontWeight: 500,
-                              border: "1px solid #bcbbbbff",
-                              borderTop: "none",
-                            }}
-                          >
-                            {t.name}
-                          </Box>
+                          {renderSmallCheckbox(t.id)}
                         </Box>
-                      </Grid>
-                    ))}
-                  </Grid>
-                )}
+
+                        {/* LABEL (UNCHANGED — stays below image) */}
+                        <Box
+                          sx={{
+                            width: "100%",
+                            background: "#f9f9faff",
+                            padding: "4px 6px",
+                            textAlign: "left",
+                            fontSize: 11,
+                            color: "#000",
+                            fontWeight: 500,
+                            borderTop: "1px solid #ccc",
+                          }}
+                        >
+                          {t.name}
+                        </Box>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
               </AccordionDetails>
             </Accordion>
           ))}
@@ -836,7 +836,7 @@ const DragDropPOC = ({ jobData }) => {
                     style={{
                       width: "100%",
                       height: "100%",
-                      objectFit: "fill",
+                      objectFit: "contain",
                       display: "block",
                     }}
                   />
