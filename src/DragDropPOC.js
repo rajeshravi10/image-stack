@@ -618,11 +618,11 @@ const DragDropPOC = ({ jobData }) => {
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Switch
                 size="small"
-                checked={collapseStack}
-                onChange={(e) => setCollapseStack(e.target.checked)}
+                checked={!collapseStack}
+                onChange={(e) => setCollapseStack(!e.target.checked)}
               />
 
-              <Typography sx={{ fontSize: 12 }}>Collapse</Typography>
+              <Typography sx={{ fontSize: 12 }}>Expand</Typography>
             </Box>
           )}
 
