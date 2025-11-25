@@ -543,6 +543,8 @@ const DragDropPOC = ({ jobData }) => {
 
           // ⭐ THIS IS THE MAGIC:
           bottom: isStackView ? (collapseStack ? 120 : "60%") : 120,
+          transition: "height 0s ease-out, bottom 0s ease-out", // ⭐ Sync speed
+
 
           zIndex: 999,
         }}
@@ -681,7 +683,7 @@ const DragDropPOC = ({ jobData }) => {
             background: "#fff",
             overflowY: "auto",
 
-            transition: "height 0.25s ease-out, bottom 0.25s ease-out", // ⭐ Sync speed
+            transition: "height 0s ease-out, bottom 0s ease-out", // ⭐ Sync speed
 
             zIndex: 20,
             boxShadow: "0px -2px 10px rgba(0,0,0,0.1)",
@@ -830,6 +832,8 @@ const DragDropPOC = ({ jobData }) => {
             scrollbarWidth: "none",
             "&::-webkit-scrollbar": { display: "none" },
             zIndex: 20, // lower than header so header remains visible
+            transition: "height 0.25s ease-out, bottom 0.25s ease-out", // ⭐ Sync speed
+
           }}
         >
           <Box sx={{ display: "flex", gap: 3, p: 2 }}>
