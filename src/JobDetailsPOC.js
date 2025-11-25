@@ -56,12 +56,16 @@ const JobDetailsPOC = ({ onBack = () => window.history.back() }) => {
       {/* MAIN LAYOUT */}
       <Box sx={{ flex: 1, display: "flex", overflow: "hidden" }}>
         {/* LEFT SIDE – 70% */}
+        {/* LEFT SIDE – 70% */}
         <Box
           sx={{
             flex: "0 0 70%",
-            overflow: "hidden",
             minWidth: 0,
             background: "transparent",
+            display: "flex",
+            flexDirection: "column",
+            position: "relative",
+            overflow: "hidden",
           }}
         >
           <DragDropPOC jobData={jobData} />

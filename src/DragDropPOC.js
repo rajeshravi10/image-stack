@@ -328,8 +328,8 @@ const DragDropPOC = ({ jobData }) => {
         height: "100%",
         display: "flex",
         flexDirection: "column",
+        position: "relative", // <--- important: holds absolute bottom panel
         overflow: "hidden",
-        position: "relative",
       }}
     >
       {/* ======================================================
@@ -345,13 +345,17 @@ const DragDropPOC = ({ jobData }) => {
           display: "flex",
           p: 2,
           background: "#F9FBFC",
-          position: "relative",
+          position: "absolute",
+          bottom: "160px",
+          top: 0,
+          right: 0,
+          left: 0,
           overflow: "hidden",
           border: isDragOver ? "2px dashed #5465FF" : "2px dashed transparent",
           backgroundColor: isDragOver ? "#5465FF10" : "#F9FBFC",
           transition: "0.15s",
           justifyContent: "center", // ✅ FIX
-          gap: 4, // 👍 Optional: adds spacing between the two images
+          gap: 2, // 👍 Optional: adds spacing between the two images
         }}
       >
         {/* dashed preview drop divider */}
@@ -380,6 +384,7 @@ const DragDropPOC = ({ jobData }) => {
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",
+                p: 2,
               }}
             >
               <Box
@@ -427,6 +432,7 @@ const DragDropPOC = ({ jobData }) => {
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",
+                p: 2,
               }}
             >
               <Box
@@ -471,17 +477,6 @@ const DragDropPOC = ({ jobData }) => {
 
         {/* SINGLE VIEW */}
         {!sideBySideRef && previewThumb && (
-          // <Box
-          //   sx={{
-          //     maxWidth: "100%",
-          //     maxHeight: "100%",
-          //     flex: "1 1 auto",
-          //     display: "flex",
-          //     justifyContent: "center",
-          //     alignItems: "center",
-          //     overflow: "hidden",
-          //   }}
-          // >
           <Box
             sx={{
               position: "relative",
@@ -525,7 +520,6 @@ const DragDropPOC = ({ jobData }) => {
               {previewThumb.name}
             </Box>
           </Box>
-          //  </Box>
         )}
       </Box>
 
@@ -542,7 +536,15 @@ const DragDropPOC = ({ jobData }) => {
           borderBottom: "1px solid #D9DADB",
           px: 3,
           background: "#fff",
-          zIndex: 200,
+
+          position: "absolute",
+          left: 0,
+          right: 0,
+
+          // ⭐ THIS IS THE MAGIC:
+          bottom: isStackView ? (collapseStack ? 120 : "60%") : 120,
+
+          zIndex: 999,
         }}
       >
         <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
@@ -571,7 +573,6 @@ const DragDropPOC = ({ jobData }) => {
             <img src={BrLogo} style={{ width: "100%" }} />
           </IconButton>
 
-          {/* WHEN IN FILMSTRIP VIEW → SHOW DROPDOWN */}
           {!isStackView ? (
             <Box>
               <Box
@@ -611,7 +612,7 @@ const DragDropPOC = ({ jobData }) => {
               </Menu>
             </Box>
           ) : (
-            /* WHEN IN STACK VIEW → SHOW COLLAPSE STACK TOGGLE */
+            // WHEN IN STACK VIEW → SHOW COLLAPSE STACK TOGGLE
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Switch
                 size="small"
@@ -672,14 +673,18 @@ const DragDropPOC = ({ jobData }) => {
       {isStackView && (
         <Box
           sx={{
-            height: collapseStack ? 120 : "60%", // 🔥 MOVES DOWN/UP
-            overflowY: "auto",
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: collapseStack ? 120 : "60%",
             background: "#fff",
-            boxShadow: "0px -6px 18px rgba(0,0,0,0.12)",
-            zIndex: 150,
-            px: 1,
-            py: 1,
-            transition: "height 0.25s ease-out",
+            overflowY: "auto",
+
+            transition: "height 0.25s ease-out, bottom 0.25s ease-out", // ⭐ Sync speed
+
+            zIndex: 20,
+            boxShadow: "0px -2px 10px rgba(0,0,0,0.1)",
           }}
         >
           {accordionConfig.map(({ key, label, items }) => (
@@ -811,19 +816,23 @@ const DragDropPOC = ({ jobData }) => {
           ref={thumbStripRef}
           onWheel={handleWheel}
           sx={{
-            position: "relative",
-            px: 3,
-            py: 1,
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
             height: 120,
             background: "#F9FBFC",
             userSelect: "none",
             overflowX: "auto",
             overflowY: "hidden",
-            scrollbarWidth: "none", // Firefox
+            px: 3,
+            py: 1,
+            scrollbarWidth: "none",
             "&::-webkit-scrollbar": { display: "none" },
+            zIndex: 20, // lower than header so header remains visible
           }}
         >
-          <Box sx={{ display: "flex", gap: 3 }}>
+          <Box sx={{ display: "flex", gap: 3, p: 2 }}>
             {thumbs.map((thumb) => (
               <Box key={thumb.id} sx={{ minWidth: 90 }}>
                 <Box
