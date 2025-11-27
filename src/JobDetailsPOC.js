@@ -7,7 +7,7 @@ import DetailsSidebarPOC from "./DetailsSidebarPOC";
 
 const JobDetailsPOC = ({ onBack = () => window.history.back() }) => {
   const location = useLocation();
-  const jobId = location.state?.jobId || "POC123"; // fallback
+  const jobId = location.state?.jobId;
 
   const mockJobs = {
     POC123: {
@@ -22,7 +22,7 @@ const JobDetailsPOC = ({ onBack = () => window.history.back() }) => {
       source_file_name: "BQ41...A.TIF",
     },
     POC999: {
-      pulse_job_id: "POC999",
+      pulse_job_id: "pocany",
       workflow_code: "WF",
       external_job_id: "EXT999",
       customer_assignment_id: "CUST999",

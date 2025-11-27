@@ -22,11 +22,11 @@ import LayersLogo from "./assets/logos/layers-logo.png";
 import PsLogo from "./assets/logos/Ps-logo.png";
 import BrLogo from "./assets/logos/Br-logo.png";
 
-import { jobImageMapping } from "./jobImageMapping";
+import { getStaticJobMapping } from "./jobImageMapping";
 
 const DragDropPOC = ({ jobData }) => {
-  const jobId = jobData?.pulse_job_id || "POC123";
-  const mapping = jobImageMapping[jobId];
+  const jobId = jobData?.pulse_job_id;
+  const mapping = getStaticJobMapping(jobId);
 
   // Build the initial thumbs list from mapping file
   const buildThumbs = () => {
@@ -37,8 +37,24 @@ const DragDropPOC = ({ jobData }) => {
         ...mapping.jobFile,
         isSource: true,
       },
-      ...mapping.references.map((r) => ({ ...r, isSource: false })),
-      ...mapping.deliverables.map((d) => ({ ...d, isSource: false })),
+
+      // reference files
+      ...mapping.references.map((r) => ({
+        ...r,
+        isSource: false,
+      })),
+
+      // deliverables
+      ...mapping.deliverables.map((d) => ({
+        ...d,
+        isSource: false,
+      })),
+
+      // WIP files (no preview if backend says so)
+      ...mapping.wip.map((w) => ({
+        ...w,
+        isSource: false,
+      })),
     ];
   };
 
@@ -65,7 +81,7 @@ const DragDropPOC = ({ jobData }) => {
     "Job Files",
     "References",
     "Deliverables",
-    "Extras",
+    "WIP",
   ];
 
   // preview tracking (default to job file)
@@ -177,7 +193,7 @@ const DragDropPOC = ({ jobData }) => {
         job: true,
         reference: true,
         deliverable: true,
-        extra: true, // 👈 add this also
+        wip: true, // 👈 add this also
       });
       return;
     }
@@ -203,8 +219,8 @@ const DragDropPOC = ({ jobData }) => {
       return;
     }
 
-    if (filter === "Extras") {
-      setThumbs(allThumbs.filter((x) => x.type === "extra"));
+    if (filter === "WIP") {
+      setThumbs(allThumbs.filter((x) => x.type === "wip"));
       return;
     }
   };
@@ -216,7 +232,7 @@ const DragDropPOC = ({ jobData }) => {
         job: true,
         reference: true,
         deliverable: true,
-        extra: true,
+        wip: true,
       });
     }
   }, [isStackView]);
@@ -233,7 +249,7 @@ const DragDropPOC = ({ jobData }) => {
           job: key === "job",
           reference: key === "reference",
           deliverable: key === "deliverable",
-          extra: key === "extra", // ✅ added
+          wip: key === "wip", // ✅ added
         });
       } else {
         // collapse all
@@ -241,7 +257,7 @@ const DragDropPOC = ({ jobData }) => {
           job: false,
           reference: false,
           deliverable: false,
-          extra: false, // ✅ added
+          wip: false, // ✅ added
         });
       }
     }
@@ -275,7 +291,7 @@ const DragDropPOC = ({ jobData }) => {
     job: allThumbs.filter((t) => t.type === "job"),
     reference: allThumbs.filter((t) => t.type === "reference"),
     deliverable: allThumbs.filter((t) => t.type === "deliverable"),
-    extra: allThumbs.filter((t) => t.type === "extra"), // 👈 add this
+    wip: allThumbs.filter((t) => t.type === "wip"), // 👈 add this
   };
 
   // ------------------------------
@@ -302,7 +318,7 @@ const DragDropPOC = ({ jobData }) => {
     job: "Job Files",
     reference: "References",
     deliverable: "Deliverables",
-    extra: "Extra Files", // ⭐ now SAFE
+    wip: "WIP Files", // ⭐ now SAFE
   }).map(([key, label]) => ({
     key,
     label,
@@ -317,9 +333,28 @@ const DragDropPOC = ({ jobData }) => {
       return allThumbs.filter((t) => t.type === "reference").length;
     if (selectedFilter === "Deliverables")
       return allThumbs.filter((t) => t.type === "deliverable").length;
-    if (selectedFilter === "Extras")
-      return allThumbs.filter((t) => t.type === "extra").length;
+    if (selectedFilter === "WIP")
+      return allThumbs.filter((t) => t.type === "wip").length;
     return 0;
+  };
+
+  const getSelectedIds = () => {
+    return checked; // 'checked' already holds selected file IDs
+  };
+
+  const handleAppLaunch = (appName) => {
+    const selectedIds = getSelectedIds();
+
+    if (selectedIds.length === 0) {
+      alert("At least 1 needs to be selected");
+      return;
+    }
+
+    console.log(`${appName} Selected IDs:`, selectedIds);
+
+    alert(
+      `${selectedIds.length} selected, ${appName} launcher needs to be implemented`
+    );
   };
 
   return (
@@ -545,7 +580,6 @@ const DragDropPOC = ({ jobData }) => {
           bottom: isStackView ? (collapseStack ? 120 : "60%") : 120,
           transition: "height 0s ease-out, bottom 0s ease-out", // ⭐ Sync speed
 
-
           zIndex: 999,
         }}
       >
@@ -566,12 +600,17 @@ const DragDropPOC = ({ jobData }) => {
           />
 
           <Typography sx={{ fontSize: 12 }}>Select All</Typography>
-
-          <IconButton sx={{ width: 22, height: 22, p: 0 }}>
+          <IconButton
+            sx={{ width: 22, height: 22, p: 0 }}
+            onClick={() => handleAppLaunch("Photoshop")}
+          >
             <img src={PsLogo} style={{ width: "100%" }} />
           </IconButton>
 
-          <IconButton sx={{ width: 22, height: 22, p: 0 }}>
+          <IconButton
+            sx={{ width: 22, height: 22, p: 0 }}
+            onClick={() => handleAppLaunch("Bridge")}
+          >
             <img src={BrLogo} style={{ width: "100%" }} />
           </IconButton>
 
@@ -833,7 +872,6 @@ const DragDropPOC = ({ jobData }) => {
             "&::-webkit-scrollbar": { display: "none" },
             zIndex: 20, // lower than header so header remains visible
             transition: "height 0.25s ease-out, bottom 0.25s ease-out", // ⭐ Sync speed
-
           }}
         >
           <Box sx={{ display: "flex", gap: 3, p: 2 }}>
@@ -853,7 +891,7 @@ const DragDropPOC = ({ jobData }) => {
                     cursor: "grab",
                     border: checked.includes(thumb.id)
                       ? "2px solid #5465FF"
-                      : "2px solid transparent",
+                      : "1px solid #ccc ",
                     background: "#fff",
                   }}
                 >
