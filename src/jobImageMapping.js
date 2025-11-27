@@ -1,29 +1,32 @@
 // jobImageMapping.js
 import { jobFileImages, referenceImages, deliverableImages } from "./previewImports";
 
-// ==========================
-// STATIC MAPPINGS
-// ==========================
+// Dummy generators
+const getDummyViewCode = (i) => `VC${i + 1}`;
+const getDummyReferenceCode = (i) => `REFCODE_${i + 1}`;
+const getDummyWipCode = (i) => `WIP_VC${i + 1}`;
+const getDummyDeliverableCode = (i) => `D_VC${i + 1}_AR${i + 1}`;
+
 export const jobImageMapping = {
   POC123: {
     jobFile: {
       id: "job-0",
       src: jobFileImages[0],
-      name: "Job File",
+      name: "VC1",               // dummy view code
       type: "job",
     },
 
     references: referenceImages.slice(0, 6).map((img, i) => ({
       id: `ref-${i + 1}`,
       src: img,
-      name: `Reference ${i + 1}`,
+      name: getDummyReferenceCode(i),     // REFCODE_1, REFCODE_2...
       type: "reference",
     })),
 
     deliverables: deliverableImages.slice(0, 6).map((img, i) => ({
       id: `del-${i + 1}`,
       src: img,
-      name: `Deliverable ${i + 1}`,
+      name: getDummyDeliverableCode(i),   // D_VC1_AR1, D_VC2_AR2...
       type: "deliverable",
     })),
 
@@ -34,21 +37,21 @@ export const jobImageMapping = {
     jobFile: {
       id: "job-0",
       src: jobFileImages[1],
-      name: "Job File",
+      name: "VC2",
       type: "job",
     },
 
     references: referenceImages.slice(6, 16).map((img, i) => ({
       id: `ref-${i + 1}`,
       src: img,
-      name: `Reference ${i + 1}`,
+      name: getDummyReferenceCode(i),     // REFCODE_1...REFCODE_10
       type: "reference",
     })),
 
     deliverables: deliverableImages.slice(6, 12).map((img, i) => ({
       id: `del-${i + 1}`,
       src: img,
-      name: `Deliverable ${i + 1}`,
+      name: getDummyDeliverableCode(i),
       type: "deliverable",
     })),
 
@@ -57,23 +60,16 @@ export const jobImageMapping = {
 };
 
 // ==========================
-// DYNAMIC MAPPING SELECTOR
+// DYNAMIC SELECTOR
 // ==========================
 export const getStaticJobMapping = (jobId) => {
   if (!jobId) return jobImageMapping.POC123;
 
   const lastChar = jobId.trim().slice(-1).toLowerCase();
 
-  // Ends with number → first set
-  if (/[0-9]/.test(lastChar)) {
-    return jobImageMapping.POC123;
-  }
+  if (/[0-9]/.test(lastChar)) return jobImageMapping.POC123;
 
-  // Ends with alphabet → second set
-  if (/[a-z]/.test(lastChar)) {
-    return jobImageMapping.POC999;
-  }
+  if (/[a-z]/.test(lastChar)) return jobImageMapping.POC999;
 
-  // Fallback → first set
   return jobImageMapping.POC123;
 };

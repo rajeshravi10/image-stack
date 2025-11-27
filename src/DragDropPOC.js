@@ -81,7 +81,7 @@ const DragDropPOC = ({ jobData }) => {
     "Job Files",
     "References",
     "Deliverables",
-    "WIP",
+    "WIP Files",
   ];
 
   // preview tracking (default to job file)
@@ -219,7 +219,7 @@ const DragDropPOC = ({ jobData }) => {
       return;
     }
 
-    if (filter === "WIP") {
+    if (filter === "WIP Files") {
       setThumbs(allThumbs.filter((x) => x.type === "wip"));
       return;
     }
@@ -333,7 +333,7 @@ const DragDropPOC = ({ jobData }) => {
       return allThumbs.filter((t) => t.type === "reference").length;
     if (selectedFilter === "Deliverables")
       return allThumbs.filter((t) => t.type === "deliverable").length;
-    if (selectedFilter === "WIP")
+    if (selectedFilter === "WIP Files")
       return allThumbs.filter((t) => t.type === "wip").length;
     return 0;
   };
