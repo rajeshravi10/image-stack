@@ -12,10 +12,17 @@ const JobDetailsPOC = ({ onBack = () => window.history.back() }) => {
   /**
    * pendingAttachment: File | null
    * When the user clicks "Add to Comment" in the annotation mode,
-   * the generated PNG File is placed here.  The DetailsSidebarPOC picks
+   * the generated PNG File is placed here. The DetailsSidebarPOC picks
    * it up and pre-loads it into the comment composer.
    */
   const [pendingAttachment, setPendingAttachment] = useState(null);
+
+  /**
+   * Track which tab is active in the sidebar (0 = Job Details, 1 = Comments).
+   * This determines whether "Add to Comment" in the annotation toolbar is enabled.
+   */
+  const [activeTab, setActiveTab] = useState(0);
+  const isCommentsTabActive = activeTab === 1;
 
   const handleAnnotatedImage = useCallback((file) => {
     setPendingAttachment(file);
@@ -105,12 +112,15 @@ const JobDetailsPOC = ({ onBack = () => window.history.back() }) => {
                 justifyContent: "flex-end",
                 alignItems: "center",
                 overflowX: "auto",
+                minWidth: 0,
               }}
             />
           </Box>
+
           <DragDropPOC
             jobData={jobData}
             onAnnotatedImage={handleAnnotatedImage}
+            isCommentsTabActive={isCommentsTabActive}
           />
         </Box>
 
@@ -121,12 +131,15 @@ const JobDetailsPOC = ({ onBack = () => window.history.back() }) => {
             background: "#fff",
             borderLeft: "1px solid #D9DADB",
             overflow: "auto",
+            display: "flex",
+            flexDirection: "column",
           }}
         >
           <DetailsSidebarPOC
             jobData={jobData}
             pendingAttachment={pendingAttachment}
             onClearPendingAttachment={handleClearPendingAttachment}
+            onActiveTabChange={setActiveTab}
           />
         </Box>
       </Box>

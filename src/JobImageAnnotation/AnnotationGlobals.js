@@ -1,21 +1,50 @@
 import { useState, useEffect } from "react";
 
 const listeners = new Set();
+
 let _isAnnotating = false;
 let _activeTool = "select";
+let _canUndo = false;
+let _canRedo = false;
+let _hasSelection = false;
+let _toolSettings = { color: "#FF3B30", lineWidth: 3, opacity: 1 };
 
-// Store data for export / add to comment
-// Map keyed by imageId: { annotations, imageSrc, imageName, getCanvasBlob }
+// Map keyed by imageId: { annotations, imageSrc, imageName, jobId, selectedId }
 export const globalAnnotationData = new Map();
+
+// Map keyed by imageId: Konva Stage ref for export
+export const globalStageRefs = new Map();
+
+const notify = () => listeners.forEach((fn) => fn());
 
 export const setGlobalIsAnnotating = (val) => {
   _isAnnotating = val;
-  listeners.forEach((fn) => fn());
+  notify();
 };
 
 export const setGlobalActiveTool = (val) => {
   _activeTool = val;
-  listeners.forEach((fn) => fn());
+  notify();
+};
+
+export const setGlobalCanUndo = (val) => {
+  _canUndo = val;
+  notify();
+};
+
+export const setGlobalCanRedo = (val) => {
+  _canRedo = val;
+  notify();
+};
+
+export const setGlobalHasSelection = (val) => {
+  _hasSelection = val;
+  notify();
+};
+
+export const setGlobalToolSettings = (settings) => {
+  _toolSettings = { ..._toolSettings, ...settings };
+  notify();
 };
 
 export const toggleGlobalIsAnnotating = () =>
@@ -35,6 +64,11 @@ export const useGlobalAnnotationMode = () => {
     setIsAnnotating: setGlobalIsAnnotating,
     activeTool: _activeTool,
     setActiveTool: setGlobalActiveTool,
+    canUndo: _canUndo,
+    canRedo: _canRedo,
+    hasSelection: _hasSelection,
+    toolSettings: _toolSettings,
+    setToolSettings: setGlobalToolSettings,
   };
 };
 

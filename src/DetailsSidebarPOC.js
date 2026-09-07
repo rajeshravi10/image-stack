@@ -30,11 +30,17 @@ const DetailsSidebarPOC = ({
   jobData,
   pendingAttachment = null,
   onClearPendingAttachment = () => {},
+  onActiveTabChange = () => {},
 }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [basicOpen, setBasicOpen] = useState(true);
   const [instructionOpen, setInstructionOpen] = useState(true);
   const [checklistOpen, setChecklistOpen] = useState(true);
+
+  // Notify parent whenever tab changes
+  useEffect(() => {
+    onActiveTabChange(activeTab);
+  }, [activeTab, onActiveTabChange]);
 
   // Auto-switch to Comments tab when an annotated image is ready
   useEffect(() => {

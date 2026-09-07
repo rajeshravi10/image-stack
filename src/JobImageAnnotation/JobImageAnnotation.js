@@ -1,387 +1,46 @@
 /**
- * JobImageAnnotation.js
+ * JobImageAnnotation.js  – Konva-based annotation layer
  *
- * Renders the current job image with a transparent SVG/Canvas overlay
- * for annotation drawing.  All annotation data is stored in DISPLAY
- * coordinates while drawing, then converted to NATURAL image coordinates
- * before being saved so the export utility can use them at full resolution.
+ * Renders the job image as a Konva layer and provides an interactive
+ * annotation layer on top.
  *
  * Supported tools:
- *   select, rectangle, ellipse, polygon, freehand, line, arrow, text
+ *   select, rectangle, ellipse, freehand, line, arrow, text, highlight
  */
 
 import React, {
   useState,
   useRef,
-  useCallback,
   useEffect,
+  useCallback,
   useLayoutEffect,
 } from "react";
-import { Box, Typography, Button } from "@mui/material";
-import { Brush } from "@mui/icons-material";
+import { Box, Typography } from "@mui/material";
+
+import {
+  Stage,
+  Layer,
+  Image as KonvaImage,
+  Rect,
+  Ellipse,
+  Line,
+  Arrow,
+  Text,
+  Transformer,
+} from "react-konva";
 import {
   useGlobalAnnotationMode,
   globalAnnotationData,
+  globalStageRefs,
   annotationCommands,
+  setGlobalCanUndo,
+  setGlobalCanRedo,
+  setGlobalHasSelection,
 } from "./AnnotationGlobals";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const STROKE_COLOR = "#FF3B30";
-const STROKE_WIDTH = 3;
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Generate a simple unique ID */
 const uid = () => Math.random().toString(36).slice(2, 10);
-
-/**
- * Convert display coords → natural image coords.
- * imgEl must have naturalWidth/Height and its displayed bounding rect.
- *
- * The image is rendered with `object-fit: contain`, so there may be
- * letterbox/pillarbox offsets within the container.  We must account for
- * the actual rendered image rect inside the container.
- *
- * @param {{ x: number, y: number }} pt  – in container px
- * @param {HTMLImageElement} imgEl
- * @param {DOMRect} containerRect
- * @returns {{ x: number, y: number }}  – in natural image px
- */
-function displayToNatural(pt, imgEl, containerRect) {
-  const { naturalWidth: nw, naturalHeight: nh } = imgEl;
-  const containerW = containerRect.width;
-  const containerH = containerRect.height;
-
-  // Compute "contain" rendered size
-  const containerAspect = containerW / containerH;
-  const imgAspect = nw / nh;
-
-  let renderedW, renderedH;
-  if (imgAspect > containerAspect) {
-    renderedW = containerW;
-    renderedH = containerW / imgAspect;
-  } else {
-    renderedH = containerH;
-    renderedW = containerH * imgAspect;
-  }
-
-  const offsetX = (containerW - renderedW) / 2;
-  const offsetY = (containerH - renderedH) / 2;
-
-  const relX = pt.x - offsetX;
-  const relY = pt.y - offsetY;
-
-  return {
-    x: (relX / renderedW) * nw,
-    y: (relY / renderedH) * nh,
-  };
-}
-
-/** Inverse: natural → display */
-function naturalToDisplay(pt, imgEl, containerRect) {
-  const { naturalWidth: nw, naturalHeight: nh } = imgEl;
-  const containerW = containerRect.width;
-  const containerH = containerRect.height;
-
-  const containerAspect = containerW / containerH;
-  const imgAspect = nw / nh;
-
-  let renderedW, renderedH;
-  if (imgAspect > containerAspect) {
-    renderedW = containerW;
-    renderedH = containerW / imgAspect;
-  } else {
-    renderedH = containerH;
-    renderedW = containerH * imgAspect;
-  }
-
-  const offsetX = (containerW - renderedW) / 2;
-  const offsetY = (containerH - renderedH) / 2;
-
-  return {
-    x: (pt.x / nw) * renderedW + offsetX,
-    y: (pt.y / nh) * renderedH + offsetY,
-  };
-}
-
-/** Convert entire annotation from natural → display coords (for SVG rendering) */
-function annNaturalToDisplay(ann, imgEl, containerRect) {
-  const conv = (pt) => naturalToDisplay(pt, imgEl, containerRect);
-  const d = ann.data;
-  switch (ann.tool) {
-    case "rectangle": {
-      const tl = conv({ x: d.x, y: d.y });
-      const br = conv({ x: d.x + d.width, y: d.y + d.height });
-      return {
-        ...ann,
-        _display: { x: tl.x, y: tl.y, width: br.x - tl.x, height: br.y - tl.y },
-      };
-    }
-    case "ellipse": {
-      const c = conv({ x: d.cx, y: d.cy });
-      const rx = conv({ x: d.cx + Math.abs(d.rx), y: d.cy });
-      const ry = conv({ x: d.cx, y: d.cy + Math.abs(d.ry) });
-      return {
-        ...ann,
-        _display: { cx: c.x, cy: c.y, rx: rx.x - c.x, ry: ry.y - c.y },
-      };
-    }
-    case "polygon":
-    case "freehand":
-      return { ...ann, _display: { points: d.points.map(conv) } };
-    case "line":
-    case "arrow": {
-      const p1 = conv({ x: d.x1, y: d.y1 });
-      const p2 = conv({ x: d.x2, y: d.y2 });
-      return { ...ann, _display: { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y } };
-    }
-    case "text": {
-      const p = conv({ x: d.x, y: d.y });
-      return { ...ann, _display: { x: p.x, y: p.y, text: d.text } };
-    }
-    default:
-      return ann;
-  }
-}
-
-// ─── SVG Annotation renderers ─────────────────────────────────────────────────
-
-const STROKE_COLOR_SELECTED = "#2680EB";
-
-function AnnSvgItem({ ann, isSelected, onSelect }) {
-  const d = ann._display || {};
-  const color = ann.color || STROKE_COLOR;
-  const lw = ann.lineWidth || STROKE_WIDTH;
-  const sc = isSelected ? STROKE_COLOR_SELECTED : color;
-  const commonProps = {
-    stroke: sc,
-    strokeWidth: lw,
-    fill: "none",
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-    style: { cursor: "pointer" },
-    onClick: (e) => {
-      e.stopPropagation();
-      onSelect(ann.id);
-    },
-    onPointerDown: (e) => {
-      e.stopPropagation();
-      if (ann.onPointerDown) ann.onPointerDown(e, ann);
-    },
-  };
-
-  switch (ann.tool) {
-    case "rectangle":
-      return (
-        <rect
-          x={d.x}
-          y={d.y}
-          width={d.width}
-          height={d.height}
-          {...commonProps}
-        />
-      );
-    case "ellipse":
-      return (
-        <ellipse
-          cx={d.cx}
-          cy={d.cy}
-          rx={Math.abs(d.rx)}
-          ry={Math.abs(d.ry)}
-          {...commonProps}
-        />
-      );
-    case "polygon": {
-      const pts = (d.points || []).map((p) => `${p.x},${p.y}`).join(" ");
-      return <polygon points={pts} {...commonProps} />;
-    }
-    case "freehand": {
-      const pts = d.points || [];
-      if (pts.length < 2) return null;
-      const path = pts
-        .map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`)
-        .join(" ");
-      return <path d={path} {...commonProps} />;
-    }
-    case "line":
-      return <line x1={d.x1} y1={d.y1} x2={d.x2} y2={d.y2} {...commonProps} />;
-    case "arrow": {
-      const arrowId = `arrow-${ann.id}`;
-      return (
-        <g
-          style={{ cursor: "pointer" }}
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect(ann.id);
-          }}
-        >
-          <defs>
-            <marker
-              id={arrowId}
-              markerWidth="6"
-              markerHeight="6"
-              refX="5"
-              refY="3"
-              orient="auto"
-            >
-              <path d="M0,0 L0,6 L6,3 z" fill={sc} />
-            </marker>
-          </defs>
-          <line
-            x1={d.x1}
-            y1={d.y1}
-            x2={d.x2}
-            y2={d.y2}
-            stroke={sc}
-            strokeWidth={lw}
-            strokeLinecap="round"
-            markerEnd={`url(#${arrowId})`}
-          />
-        </g>
-      );
-    }
-    case "text": {
-      return (
-        <g
-          style={{ cursor: "pointer" }}
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect(ann.id);
-          }}
-        >
-          <rect
-            x={d.x - 4}
-            y={d.y - 18}
-            width={(d.text || "").length * 9 + 12}
-            height={24}
-            fill="rgba(0,0,0,0.55)"
-            rx={3}
-          />
-          <text
-            x={d.x}
-            y={d.y}
-            fill="#fff"
-            fontSize="16"
-            fontWeight="bold"
-            fontFamily="sans-serif"
-          >
-            {d.text}
-          </text>
-        </g>
-      );
-    }
-    default:
-      return null;
-  }
-}
-
-// ─── In-progress drawing overlay ──────────────────────────────────────────────
-
-function InProgressOverlay({ state, tool }) {
-  if (!state) return null;
-  const { startX, startY, currentX, currentY, points } = state;
-  const color = STROKE_COLOR;
-  const lw = STROKE_WIDTH;
-  const common = {
-    stroke: color,
-    strokeWidth: lw,
-    fill: "none",
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-  };
-
-  switch (tool) {
-    case "rectangle": {
-      const x = Math.min(startX, currentX);
-      const y = Math.min(startY, currentY);
-      const w = Math.abs(currentX - startX);
-      const h = Math.abs(currentY - startY);
-      return (
-        <rect
-          x={x}
-          y={y}
-          width={w}
-          height={h}
-          {...common}
-          strokeDasharray="5,3"
-        />
-      );
-    }
-    case "ellipse": {
-      const cx = (startX + currentX) / 2;
-      const cy = (startY + currentY) / 2;
-      const rx = Math.abs(currentX - startX) / 2;
-      const ry = Math.abs(currentY - startY) / 2;
-      return (
-        <ellipse
-          cx={cx}
-          cy={cy}
-          rx={rx}
-          ry={ry}
-          {...common}
-          strokeDasharray="5,3"
-        />
-      );
-    }
-    case "polygon": {
-      if (!points || points.length === 0) return null;
-      const allPts = [...points, { x: currentX, y: currentY }];
-      const pStr = allPts.map((p) => `${p.x},${p.y}`).join(" ");
-      return <polyline points={pStr} {...common} strokeDasharray="5,3" />;
-    }
-    case "freehand": {
-      if (!points || points.length < 2) return null;
-      const path = points
-        .map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`)
-        .join(" ");
-      return <path d={path} {...common} />;
-    }
-    case "line":
-      return (
-        <line
-          x1={startX}
-          y1={startY}
-          x2={currentX}
-          y2={currentY}
-          {...common}
-          strokeDasharray="5,3"
-        />
-      );
-    case "arrow": {
-      const arrowId = "ip-arrow";
-      return (
-        <g>
-          <defs>
-            <marker
-              id={arrowId}
-              markerWidth="6"
-              markerHeight="6"
-              refX="5"
-              refY="3"
-              orient="auto"
-            >
-              <path d="M0,0 L0,6 L6,3 z" fill={color} />
-            </marker>
-          </defs>
-          <line
-            x1={startX}
-            y1={startY}
-            x2={currentX}
-            y2={currentY}
-            stroke={color}
-            strokeWidth={lw}
-            strokeLinecap="round"
-            markerEnd={`url(#${arrowId})`}
-            strokeDasharray="5,3"
-          />
-        </g>
-      );
-    }
-    default:
-      return null;
-  }
-}
 
 // ─── Text Edit Popover ────────────────────────────────────────────────────────
 
@@ -404,7 +63,7 @@ function TextInputPopover({ pos, onConfirm, onCancel }) {
         position: "absolute",
         left: pos.x,
         top: pos.y,
-        zIndex: 200,
+        zIndex: 1000,
         background: "#fff",
         border: "1px solid #D9DADB",
         borderRadius: 6,
@@ -462,30 +121,312 @@ function TextInputPopover({ pos, onConfirm, onCancel }) {
   );
 }
 
+// ─── Render a single annotation shape ────────────────────────────────────────
+
+function AnnotationShape({
+  ann,
+  isSelected,
+  onSelect,
+  onDragEnd,
+  onTransformEnd,
+  isAnnotating,
+  activeTool,
+}) {
+  const shapeRef = useRef(null);
+
+  const commonProps = {
+    id: ann.id,
+    draggable: isAnnotating && activeTool === "select",
+    onClick: () => isAnnotating && onSelect(ann.id),
+    onTap: () => isAnnotating && onSelect(ann.id),
+    onDragEnd: (e) => onDragEnd(ann.id, e),
+    onTransformEnd: (e) => onTransformEnd(ann.id, e),
+  };
+
+  const strokeColor = ann.color || "#FF3B30";
+  const strokeWidth = ann.lineWidth || 3;
+  const opacity = ann.opacity != null ? ann.opacity : 1;
+
+  switch (ann.tool) {
+    case "rectangle":
+      return (
+        <Rect
+          ref={shapeRef}
+          {...commonProps}
+          x={ann.data.x}
+          y={ann.data.y}
+          width={ann.data.width}
+          height={ann.data.height}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          fill={ann.data.fill || "transparent"}
+          opacity={opacity}
+        />
+      );
+
+    case "ellipse":
+      return (
+        <Ellipse
+          ref={shapeRef}
+          {...commonProps}
+          x={ann.data.cx}
+          y={ann.data.cy}
+          radiusX={Math.abs(ann.data.rx)}
+          radiusY={Math.abs(ann.data.ry)}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          fill="transparent"
+          opacity={opacity}
+        />
+      );
+
+    case "freehand":
+    case "highlight": {
+      const pts = (ann.data.points || []).flatMap((p) => [p.x, p.y]);
+      if (pts.length < 4) return null;
+      return (
+        <Line
+          ref={shapeRef}
+          {...commonProps}
+          points={pts}
+          stroke={
+            ann.tool === "highlight" ? ann.color || "#FFD600" : strokeColor
+          }
+          strokeWidth={
+            ann.tool === "highlight" ? ann.lineWidth || 16 : strokeWidth
+          }
+          opacity={
+            ann.tool === "highlight"
+              ? ann.opacity != null
+                ? ann.opacity
+                : 0.38
+              : opacity
+          }
+          lineCap="round"
+          lineJoin="round"
+          tension={0.4}
+          globalCompositeOperation={
+            ann.tool === "highlight" ? "multiply" : "source-over"
+          }
+        />
+      );
+    }
+
+    case "line": {
+      const pts = [ann.data.x1, ann.data.y1, ann.data.x2, ann.data.y2];
+      return (
+        <Line
+          ref={shapeRef}
+          {...commonProps}
+          points={pts}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          lineCap="round"
+          opacity={opacity}
+        />
+      );
+    }
+
+    case "arrow": {
+      const pts = [ann.data.x1, ann.data.y1, ann.data.x2, ann.data.y2];
+      return (
+        <Arrow
+          ref={shapeRef}
+          {...commonProps}
+          points={pts}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          fill={strokeColor}
+          pointerLength={12}
+          pointerWidth={10}
+          lineCap="round"
+          opacity={opacity}
+        />
+      );
+    }
+
+    case "text":
+      return (
+        <Text
+          ref={shapeRef}
+          {...commonProps}
+          x={ann.data.x}
+          y={ann.data.y}
+          text={ann.data.text || ""}
+          fontSize={ann.data.fontSize || 18}
+          fill={strokeColor}
+          fontFamily="sans-serif"
+          fontStyle="bold"
+          opacity={opacity}
+        />
+      );
+
+    default:
+      return null;
+  }
+}
+
+// ─── In-progress shape overlay ────────────────────────────────────────────────
+
+function InProgressShape({ state, tool, color, lineWidth }) {
+  if (!state) return null;
+  const { startX, startY, currentX, currentY, points } = state;
+  const strokeColor = color || "#FF3B30";
+  const strokeWidth = lineWidth || 3;
+
+  switch (tool) {
+    case "rectangle": {
+      const x = Math.min(startX, currentX);
+      const y = Math.min(startY, currentY);
+      const w = Math.abs(currentX - startX);
+      const h = Math.abs(currentY - startY);
+      return (
+        <Rect
+          x={x}
+          y={y}
+          width={w}
+          height={h}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          fill="transparent"
+          dash={[5, 3]}
+        />
+      );
+    }
+    case "ellipse": {
+      const cx = (startX + currentX) / 2;
+      const cy = (startY + currentY) / 2;
+      const rx = Math.abs(currentX - startX) / 2;
+      const ry = Math.abs(currentY - startY) / 2;
+      return (
+        <Ellipse
+          x={cx}
+          y={cy}
+          radiusX={rx}
+          radiusY={ry}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          fill="transparent"
+          dash={[5, 3]}
+        />
+      );
+    }
+    case "freehand":
+    case "highlight": {
+      const pts = (points || []).flatMap((p) => [p.x, p.y]);
+      if (pts.length < 4) return null;
+      return (
+        <Line
+          points={pts}
+          stroke={tool === "highlight" ? color || "#FFD600" : strokeColor}
+          strokeWidth={tool === "highlight" ? lineWidth || 16 : strokeWidth}
+          opacity={tool === "highlight" ? 0.38 : 1}
+          lineCap="round"
+          lineJoin="round"
+          tension={0.4}
+        />
+      );
+    }
+    case "line":
+      return (
+        <Line
+          points={[startX, startY, currentX, currentY]}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          dash={[5, 3]}
+          lineCap="round"
+        />
+      );
+    case "arrow":
+      return (
+        <Arrow
+          points={[startX, startY, currentX, currentY]}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          fill={strokeColor}
+          pointerLength={12}
+          pointerWidth={10}
+          lineCap="round"
+          dash={[5, 3]}
+        />
+      );
+    default:
+      return null;
+  }
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 /**
  * @param {Object} props
- * @param {string}   props.imageSrc          - URL of current job image
- * @param {string}   props.imageName         - Display name
- * @param {Function} props.onAddToComment    - (annotatedFile: File) => void
- * @param {string}   props.jobId
+ * @param {string}  props.imageSrc
+ * @param {string}  props.imageName
+ * @param {string}  props.jobId
+ * @param {string}  props.imageId
+ * @param {Object}  props.toolSettings  – { color, lineWidth, opacity }
  */
 const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
-  const { isAnnotating, activeTool, setActiveTool } = useGlobalAnnotationMode();
+  const { isAnnotating, activeTool, setActiveTool, toolSettings } =
+    useGlobalAnnotationMode();
 
-  // Annotations stored in NATURAL image coordinates
-  const [annotations, setAnnotations] = useState([]); // committed
-  const [undoStack, setUndoStack] = useState([]); // stack of annotation arrays for undo
+  const color = toolSettings?.color || "#FF3B30";
+  const lineWidth = toolSettings?.lineWidth || 3;
+  const opacity = toolSettings?.opacity != null ? toolSettings.opacity : 1;
+
+  // ─── Annotations state ──────────────────────────────────────────────────────
+  const [annotations, setAnnotations] = useState([]);
+  const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
-
   const [selectedId, setSelectedId] = useState(null);
-  const [drawState, setDrawState] = useState(null); // in-progress drawing display coords
-  const [textPending, setTextPending] = useState(null); // { displayX, displayY, naturalX, naturalY }
-  const [isExporting, setIsExporting] = useState(false);
+  const [drawState, setDrawState] = useState(null);
+  const [textPending, setTextPending] = useState(null);
 
+  // Konva refs
+  const stageRef = useRef(null);
+  const transformerRef = useRef(null);
+  const containerRef = useRef(null);
+  const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
+
+  // Image element for Konva
+  const [konvaImage, setKonvaImage] = useState(null);
+
+  // ─── Container resize observer ───────────────────────────────────────────────
+  useLayoutEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      setStageSize({ width, height });
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // ─── Load image for Konva ────────────────────────────────────────────────────
   useEffect(() => {
-    globalAnnotationData.set(imageId || imageName, {
+    if (!imageSrc) {
+      setKonvaImage(null);
+      return;
+    }
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => setKonvaImage(img);
+    img.onerror = () => setKonvaImage(null);
+    img.src = imageSrc;
+  }, [imageSrc]);
+
+  // ─── Register stage ref for export ──────────────────────────────────────────
+  useEffect(() => {
+    const key = imageId || imageName;
+    if (stageRef.current) globalStageRefs.set(key, stageRef);
+    return () => {
+      globalStageRefs.delete(key);
+    };
+  }, [imageId, imageName, stageSize]);
+
+  // ─── Sync to globalAnnotationData ───────────────────────────────────────────
+  useEffect(() => {
+    const key = imageId || imageName;
+    globalAnnotationData.set(key, {
       imageSrc,
       imageName,
       jobId,
@@ -493,24 +434,36 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
       selectedId,
     });
     return () => {
-      globalAnnotationData.delete(imageId || imageName);
+      globalAnnotationData.delete(key);
     };
   }, [imageId, imageName, imageSrc, jobId, annotations, selectedId]);
 
-  const containerRef = useRef(null); // the Box that holds the image
-  const imgRef = useRef(null); // the <img> element
-  const svgRef = useRef(null);
+  // ─── Update global undo/redo/selection state ─────────────────────────────────
+  useEffect(() => {
+    setGlobalCanUndo(undoStack.length > 0);
+    setGlobalCanRedo(redoStack.length > 0);
+  }, [undoStack, redoStack]);
 
-  // For move: track delta
-  const dragRef = useRef(null);
+  useEffect(() => {
+    setGlobalHasSelection(!!selectedId);
+  }, [selectedId]);
 
-  // ─── Image dimension helpers ──────────────────────────────────────────────
+  // ─── Transformer attachment ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (!transformerRef.current || !stageRef.current) return;
+    if (selectedId && activeTool === "select") {
+      const node = stageRef.current.findOne(`#${selectedId}`);
+      if (node) {
+        transformerRef.current.nodes([node]);
+        transformerRef.current.getLayer()?.batchDraw();
+        return;
+      }
+    }
+    transformerRef.current.nodes([]);
+    transformerRef.current.getLayer()?.batchDraw();
+  }, [selectedId, activeTool, annotations]);
 
-  const getImgEl = () => imgRef.current;
-  const getContainerRect = () => containerRef.current?.getBoundingClientRect();
-
-  // ─── Annotation history ───────────────────────────────────────────────────
-
+  // ─── Annotation history helpers ──────────────────────────────────────────────
   const pushHistory = useCallback(
     (newAnnotations) => {
       setUndoStack((prev) => [...prev, annotations]);
@@ -520,23 +473,23 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
     [annotations]
   );
 
-  const handleUndo = () => {
+  const handleUndo = useCallback(() => {
     if (undoStack.length === 0) return;
     const prev = undoStack[undoStack.length - 1];
     setRedoStack((s) => [...s, annotations]);
     setAnnotations(prev);
     setUndoStack((s) => s.slice(0, -1));
     setSelectedId(null);
-  };
+  }, [undoStack, annotations]);
 
-  const handleRedo = () => {
+  const handleRedo = useCallback(() => {
     if (redoStack.length === 0) return;
     const next = redoStack[redoStack.length - 1];
     setUndoStack((s) => [...s, annotations]);
     setAnnotations(next);
     setRedoStack((s) => s.slice(0, -1));
     setSelectedId(null);
-  };
+  }, [redoStack, annotations]);
 
   const handleDelete = useCallback(() => {
     if (!selectedId) return;
@@ -544,35 +497,41 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
     setSelectedId(null);
   }, [annotations, selectedId, pushHistory]);
 
-  const handleCancel = useCallback(() => {
-    setAnnotations([]);
-    setUndoStack([]);
-    setRedoStack([]);
+  const handleClearAll = useCallback(() => {
+    pushHistory([]);
     setSelectedId(null);
-    setDrawState(null);
-  }, []);
+  }, [pushHistory]);
 
+  // ─── Global command listener ─────────────────────────────────────────────────
   useEffect(() => {
     const handleCmd = (e) => {
       if (e.type === "undo") handleUndo();
       if (e.type === "redo") handleRedo();
       if (e.type === "delete") handleDelete();
-      if (e.type === "cancel") handleCancel();
+      if (e.type === "clearAll") handleClearAll();
+      if (e.type === "cancel") {
+        setAnnotations([]);
+        setUndoStack([]);
+        setRedoStack([]);
+        setSelectedId(null);
+        setDrawState(null);
+      }
     };
     annotationCommands.addEventListener("undo", handleCmd);
     annotationCommands.addEventListener("redo", handleCmd);
     annotationCommands.addEventListener("delete", handleCmd);
+    annotationCommands.addEventListener("clearAll", handleCmd);
     annotationCommands.addEventListener("cancel", handleCmd);
     return () => {
       annotationCommands.removeEventListener("undo", handleCmd);
       annotationCommands.removeEventListener("redo", handleCmd);
       annotationCommands.removeEventListener("delete", handleCmd);
+      annotationCommands.removeEventListener("clearAll", handleCmd);
       annotationCommands.removeEventListener("cancel", handleCmd);
     };
-  }, [handleUndo, handleRedo, handleDelete, handleCancel]);
+  }, [handleUndo, handleRedo, handleDelete, handleClearAll]);
 
-  // ─── Keyboard shortcuts ───────────────────────────────────────────────────
-
+  // ─── Keyboard shortcuts ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAnnotating) return;
     const onKey = (e) => {
@@ -589,137 +548,79 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+  }, [isAnnotating, handleUndo, handleRedo, handleDelete, setActiveTool]);
 
-  // ─── Mouse event handlers ─────────────────────────────────────────────────
-
-  const getSVGPos = (e) => {
-    if (!svgRef.current) return { x: 0, y: 0 };
-    const rect = svgRef.current.getBoundingClientRect();
-    const src = e.touches ? e.touches[0] : e;
-    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+  // ─── Image fitting ───────────────────────────────────────────────────────────
+  const getImageLayout = () => {
+    if (!konvaImage || !stageSize.width || !stageSize.height) {
+      return { x: 0, y: 0, width: stageSize.width, height: stageSize.height };
+    }
+    const { naturalWidth: nw, naturalHeight: nh } = konvaImage;
+    const containerAspect = stageSize.width / stageSize.height;
+    const imgAspect = nw / nh;
+    let w, h;
+    if (imgAspect > containerAspect) {
+      w = stageSize.width;
+      h = stageSize.width / imgAspect;
+    } else {
+      h = stageSize.height;
+      w = stageSize.height * imgAspect;
+    }
+    return {
+      x: (stageSize.width - w) / 2,
+      y: (stageSize.height - h) / 2,
+      width: w,
+      height: h,
+    };
   };
 
-  const displayToNat = useCallback((displayPt) => {
-    const imgEl = getImgEl();
-    const containerRect = getContainerRect();
-    if (!imgEl || !containerRect) return displayPt;
-    return displayToNatural(displayPt, imgEl, containerRect);
-  }, []);
+  const imageLayout = getImageLayout();
 
-  // commit a finished annotation (already in natural coords)
-  const commitAnnotation = useCallback(
-    (ann) => {
-      const newList = [...annotations, ann];
-      setUndoStack((prev) => [...prev, annotations]);
-      setRedoStack([]);
-      setAnnotations(newList);
-      setSelectedId(ann.id);
-    },
-    [annotations]
-  );
+  // ─── Stage pointer event handlers ────────────────────────────────────────────
 
-  const handleMouseDown = (e) => {
+  const getStagePos = (e) => {
+    const stage = stageRef.current;
+    const pos = stage.getPointerPosition();
+    return { x: pos?.x ?? 0, y: pos?.y ?? 0 };
+  };
+
+  const handleStageMouseDown = (e) => {
+    if (!isAnnotating) return;
+
+    // If clicking on a shape while in select mode – let shape's onClick handle it
     if (activeTool === "select") {
-      setSelectedId(null);
+      const clickedOnStage = e.target === e.target.getStage();
+      if (clickedOnStage) setSelectedId(null);
       return;
     }
+
     if (activeTool === "text") {
-      const pos = getSVGPos(e);
-      const nat = displayToNat(pos);
-      setTextPending({
-        displayX: pos.x,
-        displayY: pos.y,
-        naturalX: nat.x,
-        naturalY: nat.y,
-      });
+      const pos = getStagePos(e);
+      setTextPending({ x: pos.x, y: pos.y });
       return;
     }
 
-    e.preventDefault();
-    const pos = getSVGPos(e);
-
-    if (activeTool === "polygon") {
-      setDrawState((prev) => {
-        if (!prev) {
-          return {
-            startX: pos.x,
-            startY: pos.y,
-            currentX: pos.x,
-            currentY: pos.y,
-            points: [{ x: pos.x, y: pos.y }],
-          };
-        }
-        return { ...prev, points: [...prev.points, { x: pos.x, y: pos.y }] };
-      });
-      return;
-    }
+    e.evt.preventDefault();
+    const pos = getStagePos(e);
+    const isPath = activeTool === "freehand" || activeTool === "highlight";
 
     setDrawState({
       startX: pos.x,
       startY: pos.y,
       currentX: pos.x,
       currentY: pos.y,
-      points: activeTool === "freehand" ? [{ x: pos.x, y: pos.y }] : undefined,
+      points: isPath ? [{ x: pos.x, y: pos.y }] : undefined,
     });
   };
 
-  const handleMouseMove = (e) => {
-    if (activeTool === "select" && dragRef.current) {
-      const pos = getSVGPos(e);
-      const { id, startPos, startAnn } = dragRef.current;
+  const handleStageMouseMove = (e) => {
+    if (!isAnnotating || !drawState) return;
+    if (activeTool === "select" || activeTool === "text") return;
 
-      const natStart = displayToNat(startPos);
-      const natCur = displayToNat(pos);
-      const dx = natCur.x - natStart.x;
-      const dy = natCur.y - natStart.y;
+    const pos = getStagePos(e);
+    const isPath = activeTool === "freehand" || activeTool === "highlight";
 
-      dragRef.current.moved = true;
-
-      setAnnotations((prev) =>
-        prev.map((a) => {
-          if (a.id !== id) return a;
-          const newData = JSON.parse(JSON.stringify(startAnn.data)); // clone
-          if (a.tool === "rectangle") {
-            newData.x += dx;
-            newData.y += dy;
-          }
-          if (a.tool === "ellipse") {
-            newData.cx += dx;
-            newData.cy += dy;
-          }
-          if (a.tool === "polygon" || a.tool === "freehand") {
-            newData.points = newData.points.map((p) => ({
-              x: p.x + dx,
-              y: p.y + dy,
-            }));
-          }
-          if (a.tool === "line" || a.tool === "arrow") {
-            newData.x1 += dx;
-            newData.y1 += dy;
-            newData.x2 += dx;
-            newData.y2 += dy;
-          }
-          if (a.tool === "text") {
-            newData.x += dx;
-            newData.y += dy;
-          }
-          return { ...a, data: newData };
-        })
-      );
-      return;
-    }
-
-    if (!drawState) return;
-    if (
-      activeTool === "select" ||
-      activeTool === "text" ||
-      activeTool === "polygon"
-    )
-      return;
-
-    const pos = getSVGPos(e);
-    if (activeTool === "freehand") {
+    if (isPath) {
       setDrawState((prev) => ({
         ...prev,
         currentX: pos.x,
@@ -731,320 +632,316 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
     }
   };
 
-  const handleMouseUp = (e) => {
-    if (activeTool === "select") {
-      if (dragRef.current) {
-        if (dragRef.current.moved) {
-          const original = dragRef.current.originalArray;
-          setUndoStack((prev) => [...prev, original]);
-          setRedoStack([]);
-        }
-        dragRef.current = null;
-      }
-      return;
-    }
-
-    if (!drawState) return;
-    if (activeTool === "polygon") return; // polygon finishes on dblclick
+  const handleStageMouseUp = () => {
+    if (!isAnnotating || !drawState) return;
     if (activeTool === "select" || activeTool === "text") return;
 
-    const pos = getSVGPos(e);
-    const { startX, startY, points } = drawState;
-
-    const conv = (pt) => displayToNat(pt);
-
-    let newAnn = null;
+    const { startX, startY, currentX, currentY, points } = drawState;
     const id = uid();
-    const base = {
-      id,
-      tool: activeTool,
-      color: STROKE_COLOR,
-      lineWidth: STROKE_WIDTH,
-    };
+    const base = { id, tool: activeTool, color, lineWidth, opacity };
+    let newAnn = null;
 
     switch (activeTool) {
       case "rectangle": {
-        const x = Math.min(startX, pos.x);
-        const y = Math.min(startY, pos.y);
-        const w = Math.abs(pos.x - startX);
-        const h = Math.abs(pos.y - startY);
+        const x = Math.min(startX, currentX);
+        const y = Math.min(startY, currentY);
+        const w = Math.abs(currentX - startX);
+        const h = Math.abs(currentY - startY);
         if (w < 4 || h < 4) break;
-        const tl = conv({ x, y });
-        const br = conv({ x: x + w, y: y + h });
-        newAnn = {
-          ...base,
-          data: { x: tl.x, y: tl.y, width: br.x - tl.x, height: br.y - tl.y },
-        };
+        newAnn = { ...base, data: { x, y, width: w, height: h } };
         break;
       }
       case "ellipse": {
-        const cx = (startX + pos.x) / 2;
-        const cy = (startY + pos.y) / 2;
-        const rx = Math.abs(pos.x - startX) / 2;
-        const ry = Math.abs(pos.y - startY) / 2;
+        const cx = (startX + currentX) / 2;
+        const cy = (startY + currentY) / 2;
+        const rx = Math.abs(currentX - startX) / 2;
+        const ry = Math.abs(currentY - startY) / 2;
         if (rx < 4 || ry < 4) break;
-        const natC = conv({ x: cx, y: cy });
-        const natRx = conv({ x: cx + rx, y: cy });
-        const natRy = conv({ x: cx, y: cy + ry });
-        newAnn = {
-          ...base,
-          data: {
-            cx: natC.x,
-            cy: natC.y,
-            rx: natRx.x - natC.x,
-            ry: natRy.y - natC.y,
-          },
-        };
+        newAnn = { ...base, data: { cx, cy, rx, ry } };
         break;
       }
-      case "freehand": {
+      case "freehand":
+      case "highlight": {
         if (!points || points.length < 2) break;
-        newAnn = { ...base, data: { points: points.map(conv) } };
+        newAnn = { ...base, data: { points } };
         break;
       }
       case "line": {
-        if (Math.abs(pos.x - startX) < 4 && Math.abs(pos.y - startY) < 4) break;
-        const p1 = conv({ x: startX, y: startY });
-        const p2 = conv({ x: pos.x, y: pos.y });
-        newAnn = { ...base, data: { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y } };
+        if (Math.abs(currentX - startX) < 4 && Math.abs(currentY - startY) < 4)
+          break;
+        newAnn = {
+          ...base,
+          data: { x1: startX, y1: startY, x2: currentX, y2: currentY },
+        };
         break;
       }
       case "arrow": {
-        if (Math.abs(pos.x - startX) < 4 && Math.abs(pos.y - startY) < 4) break;
-        const p1 = conv({ x: startX, y: startY });
-        const p2 = conv({ x: pos.x, y: pos.y });
-        newAnn = { ...base, data: { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y } };
+        if (Math.abs(currentX - startX) < 4 && Math.abs(currentY - startY) < 4)
+          break;
+        newAnn = {
+          ...base,
+          data: { x1: startX, y1: startY, x2: currentX, y2: currentY },
+        };
         break;
       }
       default:
         break;
     }
 
-    if (newAnn) commitAnnotation(newAnn);
-    setDrawState(null);
-  };
-
-  // Polygon double-click to close
-  const handleDblClick = (e) => {
-    if (activeTool !== "polygon" || !drawState) return;
-    e.preventDefault();
-    const { points } = drawState;
-    if (!points || points.length < 3) {
-      setDrawState(null);
-      return;
+    if (newAnn) {
+      const newList = [...annotations, newAnn];
+      setUndoStack((prev) => [...prev, annotations]);
+      setRedoStack([]);
+      setAnnotations(newList);
+      setSelectedId(newAnn.id);
     }
-    const conv = (pt) => displayToNat(pt);
-    const natPoints = points.map(conv);
-    commitAnnotation({
-      id: uid(),
-      tool: "polygon",
-      color: STROKE_COLOR,
-      lineWidth: STROKE_WIDTH,
-      data: { points: natPoints },
-    });
     setDrawState(null);
   };
 
-  // ─── Text confirm ─────────────────────────────────────────────────────────
+  // ─── Drag/Transform end handlers ─────────────────────────────────────────────
+
+  const handleDragEnd = useCallback((id, e) => {
+    const node = e.target;
+    setAnnotations((prev) => {
+      const updated = prev.map((a) => {
+        if (a.id !== id) return a;
+        const dx = node.x();
+        const dy = node.y();
+        node.x(0);
+        node.y(0);
+        const newData = { ...a.data };
+
+        if (a.tool === "rectangle") {
+          newData.x += dx;
+          newData.y += dy;
+        } else if (a.tool === "ellipse") {
+          newData.cx += dx;
+          newData.cy += dy;
+        } else if (a.tool === "freehand" || a.tool === "highlight") {
+          newData.points = newData.points.map((p) => ({
+            x: p.x + dx,
+            y: p.y + dy,
+          }));
+        } else if (a.tool === "line" || a.tool === "arrow") {
+          newData.x1 += dx;
+          newData.y1 += dy;
+          newData.x2 += dx;
+          newData.y2 += dy;
+        } else if (a.tool === "text") {
+          newData.x += dx;
+          newData.y += dy;
+        }
+        return { ...a, data: newData };
+      });
+      setUndoStack((prev2) => [...prev2, prev]);
+      setRedoStack([]);
+      return updated;
+    });
+  }, []);
+
+  const handleTransformEnd = useCallback((id, e) => {
+    const node = e.target;
+    setAnnotations((prev) => {
+      const updated = prev.map((a) => {
+        if (a.id !== id) return a;
+        const newData = { ...a.data };
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
+        node.scaleX(1);
+        node.scaleY(1);
+
+        if (a.tool === "rectangle") {
+          newData.x = node.x();
+          newData.y = node.y();
+          newData.width = Math.max(4, node.width() * scaleX);
+          newData.height = Math.max(4, node.height() * scaleY);
+          node.width(newData.width);
+          node.height(newData.height);
+        } else if (a.tool === "ellipse") {
+          newData.cx = node.x();
+          newData.cy = node.y();
+          newData.rx = Math.max(4, Math.abs(node.radiusX() * scaleX));
+          newData.ry = Math.max(4, Math.abs(node.radiusY() * scaleY));
+          node.radiusX(newData.rx);
+          node.radiusY(newData.ry);
+        } else if (a.tool === "text") {
+          newData.x = node.x();
+          newData.y = node.y();
+          newData.fontSize = Math.max(
+            8,
+            Math.round((a.data.fontSize || 18) * scaleY)
+          );
+        }
+        node.x(newData.x || newData.cx || 0);
+        node.y(newData.y || newData.cy || 0);
+        return { ...a, data: newData };
+      });
+      setUndoStack((prev2) => [...prev2, prev]);
+      setRedoStack([]);
+      return updated;
+    });
+  }, []);
+
+  // ─── Text confirm ─────────────────────────────────────────────────────────────
 
   const handleTextConfirm = (text) => {
     if (!text || !textPending) {
       setTextPending(null);
       return;
     }
-    commitAnnotation({
+    const newAnn = {
       id: uid(),
       tool: "text",
-      color: STROKE_COLOR,
-      lineWidth: STROKE_WIDTH,
-      data: { x: textPending.naturalX, y: textPending.naturalY, text },
-    });
+      color,
+      lineWidth,
+      opacity,
+      data: { x: textPending.x, y: textPending.y, text, fontSize: 18 },
+    };
+    const newList = [...annotations, newAnn];
+    setUndoStack((prev) => [...prev, annotations]);
+    setRedoStack([]);
+    setAnnotations(newList);
+    setSelectedId(newAnn.id);
     setTextPending(null);
     setActiveTool("select");
   };
 
-  const handleItemPointerDown = (e, ann) => {
-    if (activeTool !== "select") return;
-    e.stopPropagation();
-    setSelectedId(ann.id);
-    const pos = getSVGPos(e);
-    dragRef.current = {
-      id: ann.id,
-      startPos: pos,
-      startAnn: JSON.parse(JSON.stringify(ann)),
-      originalArray: annotations,
-      moved: false,
-    };
-  };
-
-  // ─── SVG dimensions (mirror container) ───────────────────────────────────
-
-  const [svgSize, setSvgSize] = useState({ width: 0, height: 0 });
-
-  useLayoutEffect(() => {
-    if (!containerRef.current) return;
-    const ro = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
-      setSvgSize({ width, height });
-    });
-    ro.observe(containerRef.current);
-    return () => ro.disconnect();
-  }, []);
-
-  // ─── Build display-space annotations ──────────────────────────────────────
-
-  const [displayAnnotations, setDisplayAnnotations] = useState([]);
-
-  useEffect(() => {
-    const imgEl = getImgEl();
-    const containerRect = getContainerRect();
-    if (!imgEl || !containerRect || !imgEl.complete) return;
-    setDisplayAnnotations(
-      annotations.map((a) => annNaturalToDisplay(a, imgEl, containerRect))
-    );
-  }, [annotations, svgSize]);
-
-  // ─── cursor ───────────────────────────────────────────────────────────────
-
+  // ─── Cursor ──────────────────────────────────────────────────────────────────
   const cursorMap = {
     select: "default",
     rectangle: "crosshair",
     ellipse: "crosshair",
-    polygon: "crosshair",
     freehand: "crosshair",
+    highlight: "crosshair",
     line: "crosshair",
     arrow: "crosshair",
     text: "text",
   };
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  const imgCursor = isAnnotating
+    ? cursorMap[activeTool] || "crosshair"
+    : "default";
+
+  // ─── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <Box
+      ref={containerRef}
       sx={{
         width: "100%",
         height: "100%",
+        position: "relative",
         display: "flex",
-        flexDirection: "column",
+        justifyContent: "center",
+        alignItems: "center",
+        userSelect: "none",
+        cursor: imgCursor,
+        overflow: "hidden",
       }}
     >
-      <Box
-        ref={containerRef}
-        sx={{
-          flex: 1,
-          position: "relative",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          overflow: "hidden",
-          userSelect: "none",
-          cursor: isAnnotating
-            ? cursorMap[activeTool] || "crosshair"
-            : "default",
-        }}
-        onMouseMove={isAnnotating ? handleMouseMove : undefined}
-        onMouseUp={isAnnotating ? handleMouseUp : undefined}
-      >
-        {/* Original Image */}
-        {imageSrc ? (
-          <img
-            ref={imgRef}
-            src={imageSrc}
-            alt={imageName || "Job image"}
-            style={{
-              maxWidth: "100%",
-              maxHeight: "100%",
-              objectFit: "contain",
-              display: "block",
-              pointerEvents: "none",
-            }}
-          />
-        ) : (
-          <Typography color="text.secondary">No image selected</Typography>
-        )}
+      {stageSize.width > 0 && stageSize.height > 0 && (
+        <Stage
+          ref={stageRef}
+          width={stageSize.width}
+          height={stageSize.height}
+          onMouseDown={handleStageMouseDown}
+          onMouseMove={handleStageMouseMove}
+          onMouseUp={handleStageMouseUp}
+          style={{ position: "absolute", top: 0, left: 0 }}
+        >
+          {/* Image Layer */}
+          <Layer listening={false}>
+            {konvaImage ? (
+              <KonvaImage
+                image={konvaImage}
+                x={imageLayout.x}
+                y={imageLayout.y}
+                width={imageLayout.width}
+                height={imageLayout.height}
+              />
+            ) : null}
+          </Layer>
 
-        {/* SVG overlay — only in annotation mode */}
-        {isAnnotating && imageSrc && (
-          <svg
-            ref={svgRef}
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: svgSize.width,
-              height: svgSize.height,
-              pointerEvents: "all",
-              overflow: "visible",
-            }}
-            onMouseDown={handleMouseDown}
-            onDoubleClick={handleDblClick}
-          >
-            {/* Committed annotations */}
-            {displayAnnotations.map((ann) => (
-              <AnnSvgItem
+          {/* Annotation Layer */}
+          <Layer>
+            {annotations.map((ann) => (
+              <AnnotationShape
                 key={ann.id}
-                ann={{ ...ann, onPointerDown: handleItemPointerDown }}
-                isSelected={ann.id === selectedId}
-                onSelect={setSelectedId}
+                ann={ann}
+                isSelected={ann.id === selectedId && activeTool === "select"}
+                onSelect={(id) => {
+                  if (activeTool !== "select") return;
+                  setSelectedId(id);
+                }}
+                onDragEnd={handleDragEnd}
+                onTransformEnd={handleTransformEnd}
+                isAnnotating={isAnnotating}
+                activeTool={activeTool}
               />
             ))}
 
-            {/* In-progress drawing */}
-            {drawState && (
-              <InProgressOverlay state={drawState} tool={activeTool} />
+            {/* In-progress drawing preview */}
+            {drawState && activeTool !== "select" && activeTool !== "text" && (
+              <InProgressShape
+                state={drawState}
+                tool={activeTool}
+                color={color}
+                lineWidth={lineWidth}
+              />
             )}
-          </svg>
-        )}
 
-        {/* Text input popover */}
-        {textPending && (
-          <TextInputPopover
-            pos={{ x: textPending.displayX, y: textPending.displayY - 30 }}
-            onConfirm={handleTextConfirm}
-            onCancel={() => setTextPending(null)}
-          />
-        )}
+            {/* Transformer for selected shape */}
+            {isAnnotating && activeTool === "select" && (
+              <Transformer
+                ref={transformerRef}
+                boundBoxFunc={(oldBox, newBox) => {
+                  if (newBox.width < 5 || newBox.height < 5) return oldBox;
+                  return newBox;
+                }}
+                rotateEnabled={false}
+              />
+            )}
+          </Layer>
+        </Stage>
+      )}
 
-        {/* File label */}
-        {imageSrc && !isAnnotating && (
-          <Box
-            sx={{
-              position: "absolute",
-              bottom: 12,
-              left: 12,
-              background: "#ffffffdd",
-              padding: "4px 10px",
-              borderRadius: "10px",
-              fontSize: 14,
-              color: "#1a73e8",
-              fontWeight: 600,
-              backdropFilter: "blur(4px)",
-              pointerEvents: "none",
-            }}
-          >
-            {imageName}
-          </Box>
-        )}
+      {/* Fallback label when no image */}
+      {!imageSrc && (
+        <Typography color="text.secondary" sx={{ position: "absolute" }}>
+          No image selected
+        </Typography>
+      )}
 
-        {/* Exporting overlay */}
-        {isExporting && (
-          <Box
-            sx={{
-              position: "absolute",
-              inset: 0,
-              background: "rgba(255,255,255,0.75)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 300,
-            }}
-          >
-            <Typography fontWeight={600}>
-              Generating annotated image…
-            </Typography>
-          </Box>
-        )}
-      </Box>
+      {/* File label */}
+      {imageSrc && !isAnnotating && (
+        <Box
+          sx={{
+            position: "absolute",
+            bottom: 12,
+            left: 12,
+            background: "#ffffffdd",
+            padding: "4px 10px",
+            borderRadius: "10px",
+            fontSize: 14,
+            color: "#1a73e8",
+            fontWeight: 600,
+            backdropFilter: "blur(4px)",
+            pointerEvents: "none",
+            zIndex: 10,
+          }}
+        >
+          {imageName}
+        </Box>
+      )}
+
+      {/* Text input popup */}
+      {textPending && (
+        <TextInputPopover
+          pos={{ x: textPending.x, y: Math.max(0, textPending.y - 40) }}
+          onConfirm={handleTextConfirm}
+          onCancel={() => setTextPending(null)}
+        />
+      )}
     </Box>
   );
 };

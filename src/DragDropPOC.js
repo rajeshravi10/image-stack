@@ -27,7 +27,7 @@ import JobImageAnnotation from "./JobImageAnnotation/JobImageAnnotation";
 import AnnotationHeaderControl from "./JobImageAnnotation/AnnotationHeaderControl";
 import html2canvas from "html2canvas";
 
-const DragDropPOC = ({ jobData, onAnnotatedImage }) => {
+const DragDropPOC = ({ jobData, onAnnotatedImage, isCommentsTabActive }) => {
   const jobId = jobData?.pulse_job_id;
   const mapping = getStaticJobMapping(jobId);
 
@@ -412,6 +412,7 @@ const DragDropPOC = ({ jobData, onAnnotatedImage }) => {
       }}
     >
       <AnnotationHeaderControl
+        isCommentsTabActive={isCommentsTabActive}
         onCapturePreview={async (type) => {
           // Capture the whole DOM element preview space
           const fileName = `job-${jobId || "unknown"}-preview-annotated.png`;
