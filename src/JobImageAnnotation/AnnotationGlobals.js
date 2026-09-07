@@ -51,7 +51,7 @@ export const toggleGlobalIsAnnotating = () =>
   setGlobalIsAnnotating(!_isAnnotating);
 
 export const useGlobalAnnotationMode = () => {
-  const [stamp, setStamp] = useState(0);
+  const [, setStamp] = useState(0);
 
   useEffect(() => {
     const listener = () => setStamp((s) => s + 1);

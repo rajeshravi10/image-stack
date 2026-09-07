@@ -611,14 +611,18 @@ const DragDropPOC = ({ jobData, onAnnotatedImage, isCommentsTabActive }) => {
             sx={{ width: 22, height: 22, p: 0 }}
             onClick={() => handleAppLaunch("Photoshop")}
           >
-            <img src={PsLogo} style={{ width: "100%" }} />
+            <img
+              src={PsLogo}
+              alt="Photoshop Launcher"
+              style={{ width: "100%" }}
+            />
           </IconButton>
 
           <IconButton
             sx={{ width: 22, height: 22, p: 0 }}
             onClick={() => handleAppLaunch("Bridge")}
           >
-            <img src={BrLogo} style={{ width: "100%" }} />
+            <img src={BrLogo} alt="Bridge Launcher" style={{ width: "100%" }} />
           </IconButton>
 
           {!isStackView ? (
@@ -687,7 +691,11 @@ const DragDropPOC = ({ jobData, onAnnotatedImage, isCommentsTabActive }) => {
                 },
               }}
             >
-              <img src={ViewLogo} style={{ width: "100%" }} />
+              <img
+                src={ViewLogo}
+                alt="Filmstrip View"
+                style={{ width: "100%" }}
+              />
             </IconButton>
           </Tooltip>
 
@@ -706,7 +714,11 @@ const DragDropPOC = ({ jobData, onAnnotatedImage, isCommentsTabActive }) => {
                 },
               }}
             >
-              <img src={LayersLogo} style={{ width: "100%" }} />
+              <img
+                src={LayersLogo}
+                alt="Stack View"
+                style={{ width: "100%" }}
+              />
             </IconButton>
           </Tooltip>
         </Box>
@@ -820,6 +832,7 @@ const DragDropPOC = ({ jobData, onAnnotatedImage, isCommentsTabActive }) => {
                         >
                           <img
                             src={t.src}
+                            alt={t.name}
                             style={{
                               width: "100%",
                               height: "100%",

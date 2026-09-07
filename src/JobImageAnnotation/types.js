@@ -43,4 +43,5 @@
  * @property {string}             author         - Display name
  */
 
-export default {}; // keep as a module
+const types = {};
+export default types;
