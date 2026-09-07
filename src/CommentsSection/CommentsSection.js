@@ -25,6 +25,7 @@ import {
   AttachFile,
   ImageOutlined,
 } from "@mui/icons-material";
+import ImageLightbox from "./ImageLightbox";
 
 /**
  * @typedef {import('../JobImageAnnotation/types').JobComment} JobComment
@@ -35,7 +36,7 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 
 // ─── Single comment display ───────────────────────────────────────────────────
 
-function CommentCard({ comment }) {
+function CommentCard({ comment, onImageClick }) {
   return (
     <Box
       sx={{
@@ -85,7 +86,14 @@ function CommentCard({ comment }) {
                   borderRadius: 1,
                   border: "1px solid #E0E0E0",
                   display: "block",
+                  cursor: "pointer",
+                  transition: "opacity 0.2s, filter 0.2s",
+                  "&:hover": {
+                    opacity: 0.9,
+                    filter: "brightness(0.9)",
+                  },
                 }}
+                onClick={() => onImageClick({ src: att.url, alt: att.name })}
               />
               <Typography
                 sx={{ fontSize: 11, color: "text.secondary", mt: 0.25 }}
@@ -105,6 +113,7 @@ function CommentComposer({
   pendingAttachment,
   onClearPendingAttachment,
   onSubmit,
+  onImageClick,
 }) {
   const [text, setText] = useState("");
   const [attachmentPreviewUrl, setAttachmentPreviewUrl] = useState(null);
@@ -214,7 +223,19 @@ function CommentComposer({
               maxHeight: 160,
               objectFit: "contain",
               display: "block",
+              cursor: "pointer",
+              transition: "opacity 0.2s, filter 0.2s",
+              "&:hover": {
+                opacity: 0.9,
+                filter: "brightness(0.9)",
+              },
             }}
+            onClick={() =>
+              onImageClick({
+                src: attachmentPreviewUrl,
+                alt: attachmentFile?.name,
+              })
+            }
           />
           <Tooltip title="Remove attachment">
             <IconButton
@@ -329,6 +350,17 @@ const CommentsSection = ({ pendingAttachment, onClearPendingAttachment }) => {
   const [comments, setComments] = useState([]);
   const listEndRef = useRef(null);
 
+  // Lightbox state
+  const [lightbox, setLightbox] = useState({ open: false, src: "", alt: "" });
+
+  const handleImageClick = ({ src, alt }) => {
+    setLightbox({ open: true, src, alt });
+  };
+
+  const closeLightbox = () => {
+    setLightbox((prev) => ({ ...prev, open: false }));
+  };
+
   const handleSubmit = (comment) => {
     setComments((prev) => [...prev, comment]);
   };
@@ -375,7 +407,7 @@ const CommentsSection = ({ pendingAttachment, onClearPendingAttachment }) => {
         )}
 
         {comments.map((c) => (
-          <CommentCard key={c.id} comment={c} />
+          <CommentCard key={c.id} comment={c} onImageClick={handleImageClick} />
         ))}
         <div ref={listEndRef} />
       </Box>
@@ -385,6 +417,15 @@ const CommentsSection = ({ pendingAttachment, onClearPendingAttachment }) => {
         pendingAttachment={pendingAttachment}
         onClearPendingAttachment={onClearPendingAttachment}
         onSubmit={handleSubmit}
+        onImageClick={handleImageClick}
+      />
+
+      {/* Lightbox */}
+      <ImageLightbox
+        open={lightbox.open}
+        src={lightbox.src}
+        alt={lightbox.alt}
+        onClose={closeLightbox}
       />
     </Box>
   );
