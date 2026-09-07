@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -11,7 +11,6 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Grid,
   TextField,
   FormControl,
   InputLabel,
@@ -19,11 +18,30 @@ import {
   MenuItem,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import CommentsSection from "./CommentsSection/CommentsSection";
 
-const DetailsSidebarPOC = ({ jobData }) => {
+/**
+ * @param {Object} props
+ * @param {Object}  props.jobData
+ * @param {File|null} props.pendingAttachment       – annotated image from DragDropPOC
+ * @param {Function}  props.onClearPendingAttachment
+ */
+const DetailsSidebarPOC = ({
+  jobData,
+  pendingAttachment = null,
+  onClearPendingAttachment = () => {},
+}) => {
+  const [activeTab, setActiveTab] = useState(0);
   const [basicOpen, setBasicOpen] = useState(true);
   const [instructionOpen, setInstructionOpen] = useState(true);
   const [checklistOpen, setChecklistOpen] = useState(true);
+
+  // Auto-switch to Comments tab when an annotated image is ready
+  useEffect(() => {
+    if (pendingAttachment) {
+      setActiveTab(1);
+    }
+  }, [pendingAttachment]);
 
   return (
     <Box
@@ -36,25 +54,40 @@ const DetailsSidebarPOC = ({ jobData }) => {
       }}
     >
       {/* Tabs */}
-      <Tabs value={0} sx={{ borderBottom: "1px solid #DDD" }}>
+      <Tabs
+        value={activeTab}
+        onChange={(_, v) => setActiveTab(v)}
+        sx={{ borderBottom: "1px solid #DDD" }}
+      >
         <Tab label="Job Details" />
-        <Tab label="Comments" disabled />
+        <Tab label="Comments" />
       </Tabs>
 
-      {/* Scrollable region */}
-      <Box sx={{ flex: 1, overflowY: "auto" }}>
-        {/* Basic Information Accordion */}
-        <Accordion
-          expanded={basicOpen}
-          onChange={() => setBasicOpen(!basicOpen)}
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography sx={{ fontWeight: 600 }}>Basic Information</Typography>
-          </AccordionSummary>
+      {/* ── JOB DETAILS TAB ─────────────────────────────────────────────── */}
+      <Box
+        sx={{
+          display: activeTab === 0 ? "flex" : "none",
+          flexDirection: "column",
+          flex: 1,
+          overflow: "hidden",
+        }}
+      >
+        {/* Scrollable region */}
+        <Box sx={{ flex: 1, overflowY: "auto" }}>
+          {/* Basic Information Accordion */}
+          <Accordion
+            expanded={basicOpen}
+            onChange={() => setBasicOpen(!basicOpen)}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography sx={{ fontWeight: 600 }}>
+                Basic Information
+              </Typography>
+            </AccordionSummary>
 
-          <AccordionDetails sx={{ px: 1 }}>
-            {/* Row 1 */}
-            <Box sx={{ display: "flex", gap: 2 }}>
+            <AccordionDetails sx={{ px: 1 }}>
+              {/* Row 1 */}
+              <Box sx={{ display: "flex", gap: 2 }}>
                 <TextField
                   fullWidth
                   label="Customer Job ID"
@@ -68,12 +101,12 @@ const DetailsSidebarPOC = ({ jobData }) => {
                   size="small"
                   value="PRD1-002_Filename_U_1.TIF"
                 />
-            </Box>
+              </Box>
 
-            <Divider sx={{ my: 1 }} />
+              <Divider sx={{ my: 1 }} />
 
-            {/* Row 2 */}
-            <Box sx={{ display: "flex", gap: 2 }}>
+              {/* Row 2 */}
+              <Box sx={{ display: "flex", gap: 2 }}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Priority</InputLabel>
                   <Select label="Priority" value="Rush">
@@ -90,12 +123,12 @@ const DetailsSidebarPOC = ({ jobData }) => {
                   defaultValue="2025-11-07T10:00"
                   InputLabelProps={{ shrink: true }}
                 />
-            </Box>
+              </Box>
 
-            <Divider sx={{ my: 1 }} />
+              <Divider sx={{ my: 1 }} />
 
-            {/* Row 3 */}
-            <Box sx={{ display: "flex", gap: 2 }}>
+              {/* Row 3 */}
+              <Box sx={{ display: "flex", gap: 2 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -111,12 +144,12 @@ const DetailsSidebarPOC = ({ jobData }) => {
                   defaultValue="2025-10-30T09:30"
                   InputLabelProps={{ shrink: true }}
                 />
-            </Box>
+              </Box>
 
-            <Divider sx={{ my: 1 }} />
+              <Divider sx={{ my: 1 }} />
 
-            {/* Row 4 */}
-            <Box sx={{ display: "flex", gap: 2 }}>
+              {/* Row 4 */}
+              <Box sx={{ display: "flex", gap: 2 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -133,12 +166,12 @@ const DetailsSidebarPOC = ({ jobData }) => {
                     <MenuItem value="New">New</MenuItem>
                   </Select>
                 </FormControl>
-            </Box>
+              </Box>
 
-            <Divider sx={{ my: 1 }} />
+              <Divider sx={{ my: 1 }} />
 
-            {/* Row 5 */}
-            <Box sx={{ display: "flex", gap: 2 }}>
+              {/* Row 5 */}
+              <Box sx={{ display: "flex", gap: 2 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -155,113 +188,128 @@ const DetailsSidebarPOC = ({ jobData }) => {
                 </FormControl>
               </Box>
 
+              {/* Full Width Fields */}
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Job Instructions
+                </Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={4}
+                  size="small"
+                  placeholder="Enter Job Instructions..."
+                />
+              </Box>
 
-            {/* Full Width Fields */}
-            <Box sx={{ mt: 1 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Job Instructions
+              <Divider sx={{ my: 1 }} />
+
+              <Box sx={{ mt: 1 }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Reject Code</InputLabel>
+                  <Select label="Reject Code" value="FCO/Reference">
+                    <MenuItem value="FCO/Reference">FCO/Reference</MenuItem>
+                    <MenuItem value="Other">Other</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
+
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Rejection Reason
+                </Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  size="small"
+                  value="Hello"
+                />
+              </Box>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* Instruction Accordion */}
+          <Accordion
+            expanded={instructionOpen}
+            onChange={() => setInstructionOpen(!instructionOpen)}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography sx={{ fontWeight: 600 }}>Instruction</Typography>
+            </AccordionSummary>
+
+            <AccordionDetails>
+              <Typography variant="body2" sx={{ textAlign: "justify" }}>
+                Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
+                eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut
+                enim ad minim veniam, quis nostrud exercitation ullamco laboris
+                nisi ut aliquip ex ea commodo consequat.
               </Typography>
-              <TextField
-                fullWidth
-                multiline
-                rows={4}
-                size="small"
-                placeholder="Enter Job Instructions..."
-              />
-            </Box>
+            </AccordionDetails>
+          </Accordion>
 
-            <Divider sx={{ my: 1 }} />
+          {/* Checklists accordion */}
+          <Accordion
+            expanded={checklistOpen}
+            onChange={() => setChecklistOpen(!checklistOpen)}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography sx={{ fontWeight: 600 }}>Checklists</Typography>
+            </AccordionSummary>
 
-            <Box sx={{ mt: 1 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Reject Code</InputLabel>
-                <Select label="Reject Code" value="FCO/Reference">
-                  <MenuItem value="FCO/Reference">FCO/Reference</MenuItem>
-                  <MenuItem value="Other">Other</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
+            <AccordionDetails>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                <FormControlLabel
+                  control={<Checkbox size="small" />}
+                  label="Overall look & Feel on White BG"
+                />
+                <FormControlLabel
+                  control={<Checkbox size="small" />}
+                  label="Hair Masking on White BG"
+                />
+                <FormControlLabel
+                  control={<Checkbox size="small" />}
+                  label="Color Consistency"
+                />
+              </Box>
+            </AccordionDetails>
+          </Accordion>
+        </Box>
 
-            <Box sx={{ mt: 1 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Rejection Reason
-              </Typography>
-              <TextField
-                fullWidth
-                multiline
-                rows={3}
-                size="small"
-                value="Hello"
-              />
-            </Box>
-          </AccordionDetails>
-        </Accordion>
-
-        {/* Instruction Accordion (also open by default) */}
-        <Accordion
-          expanded={instructionOpen}
-          onChange={() => setInstructionOpen(!instructionOpen)}
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography sx={{ fontWeight: 600 }}>Instruction</Typography>
-          </AccordionSummary>
-
-          <AccordionDetails>
-            <Typography variant="body2" sx={{ textAlign: "justify" }}>
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
-              eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut
-              enim ad minim veniam, quis nostrud exercitation ullamco laboris
-              nisi ut aliquip ex ea commodo consequat.
-            </Typography>
-          </AccordionDetails>
-        </Accordion>
-
-        {/* Checklists accordion (kept as an extra) */}
-        <Accordion
-          expanded={checklistOpen}
-          onChange={() => setChecklistOpen(!checklistOpen)}
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography sx={{ fontWeight: 600 }}>Checklists</Typography>
-          </AccordionSummary>
-
-          <AccordionDetails>
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              <FormControlLabel
-                control={<Checkbox size="small" />}
-                label="Overall look & Feel on White BG"
-              />
-              <FormControlLabel
-                control={<Checkbox size="small" />}
-                label="Hair Masking on White BG"
-              />
-              <FormControlLabel
-                control={<Checkbox size="small" />}
-                label="Color Consistency"
-              />
-            </Box>
-          </AccordionDetails>
-        </Accordion>
-      </Box>
-
-      {/* Fixed Bottom Button (stays visible) */}
-      <Box
-        sx={{
-          borderTop: "1px solid #DDD",
-          p: 1.5,
-          bgcolor: "#fff",
-        }}
-      >
-        <Button
-          fullWidth
-          variant="contained"
+        {/* Fixed Bottom Button */}
+        <Box
           sx={{
-            backgroundColor: "#1E7D32",
-            "&:hover": { backgroundColor: "#166527" },
+            borderTop: "1px solid #DDD",
+            p: 1.5,
+            bgcolor: "#fff",
           }}
         >
-          Start Task
-        </Button>
+          <Button
+            fullWidth
+            variant="contained"
+            sx={{
+              backgroundColor: "#1E7D32",
+              "&:hover": { backgroundColor: "#166527" },
+            }}
+          >
+            Start Task
+          </Button>
+        </Box>
+      </Box>
+
+      {/* ── COMMENTS TAB ────────────────────────────────────────────────── */}
+      <Box
+        sx={{
+          display: activeTab === 1 ? "flex" : "none",
+          flex: 1,
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        <CommentsSection
+          pendingAttachment={pendingAttachment}
+          onClearPendingAttachment={onClearPendingAttachment}
+        />
       </Box>
     </Box>
   );

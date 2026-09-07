@@ -23,8 +23,11 @@ import PsLogo from "./assets/logos/Ps-logo.png";
 import BrLogo from "./assets/logos/Br-logo.png";
 
 import { getStaticJobMapping } from "./jobImageMapping";
+import JobImageAnnotation from "./JobImageAnnotation/JobImageAnnotation";
+import AnnotationHeaderControl from "./JobImageAnnotation/AnnotationHeaderControl";
+import html2canvas from "html2canvas";
 
-const DragDropPOC = ({ jobData }) => {
+const DragDropPOC = ({ jobData, onAnnotatedImage }) => {
   const jobId = jobData?.pulse_job_id;
   const mapping = getStaticJobMapping(jobId);
 
@@ -357,6 +360,47 @@ const DragDropPOC = ({ jobData }) => {
     );
   };
 
+  // ======================================================
+  // PREVIEW FLATTENING
+  // ======================================================
+  const handleCapturePreview = async (fileName) => {
+    if (!viewRef.current) return null;
+
+    // We add a class or pass styles to ensure SVGs and content renders properly
+    try {
+      const canvas = await html2canvas(viewRef.current, {
+        useCORS: true,
+        allowTaint: true,
+        scale: window.devicePixelRatio || 2, // High resolution
+        backgroundColor: "#F9FBFC", // default background of the preview area
+        logging: false,
+      });
+
+      return new Promise((resolve) => {
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) resolve(null);
+            else {
+              const file = new File(
+                [blob],
+                fileName || `job-${jobId}-preview-annotated.png`,
+                {
+                  type: "image/png",
+                }
+              );
+              resolve(file);
+            }
+          },
+          "image/png",
+          1.0
+        );
+      });
+    } catch (e) {
+      console.error("html2canvas capture error:", e);
+      return null;
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -367,6 +411,32 @@ const DragDropPOC = ({ jobData }) => {
         overflow: "hidden",
       }}
     >
+      <AnnotationHeaderControl
+        onCapturePreview={async (type) => {
+          // Capture the whole DOM element preview space
+          const fileName = `job-${jobId || "unknown"}-preview-annotated.png`;
+          const file = await handleCapturePreview(fileName);
+
+          if (!file) {
+            alert("Capturing the preview failed.");
+            return;
+          }
+
+          if (type === "comment") {
+            onAnnotatedImage(file, []);
+          } else if (type === "export") {
+            const url = URL.createObjectURL(file);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = file.name;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 100);
+          }
+        }}
+      />
+
       {/* ======================================================
         PREVIEW AREA (unchanged full-height section)
     ======================================================= */}
@@ -425,38 +495,19 @@ const DragDropPOC = ({ jobData }) => {
               <Box
                 sx={{
                   position: "relative",
-                  maxWidth: "100%",
-                  maxHeight: "100%",
+                  width: "100%",
+                  height: "100%",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <img
-                  src={previewThumb?.src}
-                  style={{
-                    maxWidth: "100%",
-                    maxHeight: "100%",
-                    objectFit: "contain",
-                    display: "block",
-                  }}
+                <JobImageAnnotation
+                  imageSrc={previewThumb?.src}
+                  imageName={previewThumb?.name}
+                  jobId={jobData?.pulse_job_id}
+                  imageId={previewThumb?.id}
                 />
-
-                {/* LABEL ALWAYS INSIDE IMAGE */}
-                <Box
-                  sx={{
-                    position: "absolute",
-                    bottom: 12,
-                    left: 12,
-                    background: "#ffffffdd",
-                    padding: "4px 10px",
-                    borderRadius: "10px",
-                    color: "#1a73e8",
-                    fontWeight: 600,
-                  }}
-                >
-                  {previewThumb?.name}
-                </Box>
               </Box>
             </Box>
 
@@ -473,87 +524,42 @@ const DragDropPOC = ({ jobData }) => {
               <Box
                 sx={{
                   position: "relative",
-                  maxWidth: "100%",
-                  maxHeight: "100%",
+                  width: "100%",
+                  height: "100%",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <img
-                  src={getThumbById(sideBySideRef)?.src}
-                  style={{
-                    maxWidth: "100%",
-                    maxHeight: "100%",
-                    objectFit: "contain",
-                    display: "block",
-                  }}
+                <JobImageAnnotation
+                  imageSrc={getThumbById(sideBySideRef)?.src}
+                  imageName={getThumbById(sideBySideRef)?.name}
+                  jobId={jobData?.pulse_job_id}
+                  imageId={sideBySideRef}
                 />
-
-                {/* LABEL ALWAYS INSIDE IMAGE */}
-                <Box
-                  sx={{
-                    position: "absolute",
-                    bottom: 12,
-                    left: 12,
-                    background: "#ffffffdd",
-                    padding: "4px 10px",
-                    borderRadius: "10px",
-                    color: "#1a73e8",
-                    fontWeight: 600,
-                  }}
-                >
-                  {getThumbById(sideBySideRef)?.name}
-                </Box>
               </Box>
             </Box>
           </>
         )}
 
-        {/* SINGLE VIEW */}
+        {/* SINGLE VIEW — with annotation support (only for the primary job image) */}
         {!sideBySideRef && previewThumb && (
           <Box
             sx={{
               position: "relative",
-              maxWidth: "100%",
-              maxHeight: "100%",
-              width: "auto",
-              height: "auto",
+              width: "100%",
+              height: "100%",
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
             }}
           >
-            <img
-              src={previewThumb.src}
-              alt={previewThumb.name}
-              style={{
-                maxWidth: "100%",
-                maxHeight: "100%",
-                objectFit: "contain",
-                display: "block",
-              }}
+            <JobImageAnnotation
+              imageSrc={previewThumb.src}
+              imageName={previewThumb.name}
+              jobId={jobData?.pulse_job_id}
+              imageId={previewThumb.id}
             />
-
-            {/* LABEL INSIDE IMAGE */}
-            <Box
-              sx={{
-                position: "absolute",
-                bottom: 12,
-                left: 12,
-                background: "#ffffffdd",
-                padding: "4px 10px",
-                borderRadius: "10px",
-                fontSize: 14,
-                color: "#1a73e8",
-                fontWeight: 600,
-                backdropFilter: "blur(4px)",
-                zIndex: 5,
-                pointerEvents: "none",
-              }}
-            >
-              {previewThumb.name}
-            </Box>
           </Box>
         )}
       </Box>

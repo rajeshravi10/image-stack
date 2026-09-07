@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useCallback } from "react";
 import { Box, IconButton } from "@mui/material";
 import { ArrowBack } from "@mui/icons-material";
 import { useLocation } from "react-router-dom";
@@ -8,6 +8,23 @@ import DetailsSidebarPOC from "./DetailsSidebarPOC";
 const JobDetailsPOC = ({ onBack = () => window.history.back() }) => {
   const location = useLocation();
   const jobId = location.state?.jobId;
+
+  /**
+   * pendingAttachment: File | null
+   * When the user clicks "Add to Comment" in the annotation mode,
+   * the generated PNG File is placed here.  The DetailsSidebarPOC picks
+   * it up and pre-loads it into the comment composer.
+   */
+  const [pendingAttachment, setPendingAttachment] = useState(null);
+
+  const handleAnnotatedImage = useCallback((file) => {
+    setPendingAttachment(file);
+    // Sidebar will auto-switch to Comments tab when it detects a new attachment
+  }, []);
+
+  const handleClearPendingAttachment = useCallback(() => {
+    setPendingAttachment(null);
+  }, []);
 
   const mockJobs = {
     POC123: {
@@ -46,29 +63,55 @@ const JobDetailsPOC = ({ onBack = () => window.history.back() }) => {
         flexDirection: "column",
       }}
     >
-      {/* Back Button */}
-      <Box sx={{ p: 1 }}>
-        <IconButton onClick={onBack}>
-          <ArrowBack />
-        </IconButton>
-      </Box>
-
       {/* MAIN LAYOUT */}
       <Box sx={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        {/* LEFT SIDE – 70% */}
         {/* LEFT SIDE – 70% */}
         <Box
           sx={{
             flex: "0 0 70%",
             minWidth: 0,
-            background: "transparent",
+            background: "#F9FBFC",
             display: "flex",
             flexDirection: "column",
             position: "relative",
             overflow: "hidden",
           }}
         >
-          <DragDropPOC jobData={jobData} />
+          {/* HEADER (Fixed height so toolbar appearance causes NO layout shift) */}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              px: 2,
+              py: 1,
+              minHeight: 56,
+              boxSizing: "border-box",
+              borderBottom: "1px solid #D9DADB",
+              bgcolor: "#fff",
+            }}
+          >
+            <IconButton onClick={onBack} sx={{ mr: 2 }}>
+              <ArrowBack />
+            </IconButton>
+
+            <Box sx={{ fontWeight: 600, fontSize: 16 }}>Job {jobId}</Box>
+
+            {/* Portal target for Annotation Toolbar */}
+            <Box
+              id="annotation-toolbar-portal-target"
+              sx={{
+                flex: 1,
+                display: "flex",
+                justifyContent: "flex-end",
+                alignItems: "center",
+                overflowX: "auto",
+              }}
+            />
+          </Box>
+          <DragDropPOC
+            jobData={jobData}
+            onAnnotatedImage={handleAnnotatedImage}
+          />
         </Box>
 
         {/* RIGHT SIDE – 30% */}
@@ -80,7 +123,11 @@ const JobDetailsPOC = ({ onBack = () => window.history.back() }) => {
             overflow: "auto",
           }}
         >
-          <DetailsSidebarPOC jobData={jobData} />
+          <DetailsSidebarPOC
+            jobData={jobData}
+            pendingAttachment={pendingAttachment}
+            onClearPendingAttachment={handleClearPendingAttachment}
+          />
         </Box>
       </Box>
     </Box>
