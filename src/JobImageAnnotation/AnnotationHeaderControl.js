@@ -13,7 +13,7 @@ import {
  * Renders into the portal target in the left header.
  *
  * @param {Object}   props
- * @param {Function} props.onCapturePreview   – (type:'export'|'comment') => void (DragDropPOC's html2canvas path)
+ * @param {Function} props.onCapturePreview   – (type:'export'|'comment') => void
  * @param {boolean}  props.isCommentsTabActive
  */
 export default function AnnotationHeaderControl({
@@ -49,7 +49,7 @@ export default function AnnotationHeaderControl({
     setShowClearConfirm(false);
   };
 
-  // ── Export using DragDropPOC's html2canvas approach ───────────────────────
+  // ── Export using DragDropPOC's globalStageRefs approach ────────────────────
   const handleExport = () => {
     if (onCapturePreview) onCapturePreview("export");
   };

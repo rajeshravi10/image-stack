@@ -25,7 +25,7 @@ import BrLogo from "./assets/logos/Br-logo.png";
 import { getStaticJobMapping } from "./jobImageMapping";
 import JobImageAnnotation from "./JobImageAnnotation/JobImageAnnotation";
 import AnnotationHeaderControl from "./JobImageAnnotation/AnnotationHeaderControl";
-import html2canvas from "html2canvas";
+import { globalStageRefs } from "./JobImageAnnotation/AnnotationGlobals";
 
 const DragDropPOC = ({ jobData, onAnnotatedImage, isCommentsTabActive }) => {
   const jobId = jobData?.pulse_job_id;
@@ -361,44 +361,89 @@ const DragDropPOC = ({ jobData, onAnnotatedImage, isCommentsTabActive }) => {
   };
 
   // ======================================================
-  // PREVIEW FLATTENING
+  // PREVIEW FLATTENING USING NATIVE KONVA
   // ======================================================
   const handleCapturePreview = async (fileName) => {
-    if (!viewRef.current) return null;
+    return new Promise((resolve) => {
+      try {
+        const leftStageNode = previewThumb
+          ? globalStageRefs.get(previewThumb.id)
+          : null;
+        const rightStageNode = sideBySideRef
+          ? globalStageRefs.get(sideBySideRef)
+          : null;
 
-    // We add a class or pass styles to ensure SVGs and content renders properly
-    try {
-      const canvas = await html2canvas(viewRef.current, {
-        useCORS: true,
-        allowTaint: true,
-        scale: window.devicePixelRatio || 2, // High resolution
-        backgroundColor: "#F9FBFC", // default background of the preview area
-        logging: false,
-      });
+        const leftStage = leftStageNode?.current;
+        const rightStage = rightStageNode?.current;
 
-      return new Promise((resolve) => {
-        canvas.toBlob(
-          (blob) => {
-            if (!blob) resolve(null);
-            else {
-              const file = new File(
-                [blob],
-                fileName || `job-${jobId}-preview-annotated.png`,
-                {
-                  type: "image/png",
-                }
-              );
-              resolve(file);
-            }
-          },
-          "image/png",
-          1.0
-        );
-      });
-    } catch (e) {
-      console.error("html2canvas capture error:", e);
-      return null;
-    }
+        if (!leftStage && !rightStage) {
+          resolve(null);
+          return;
+        }
+
+        const loadImg = (dataUrl) => {
+          return new Promise((res) => {
+            if (!dataUrl) return res(null);
+            const img = new Image();
+            img.onload = () => res(img);
+            img.src = dataUrl;
+          });
+        };
+
+        const generate = async () => {
+          const dl = leftStage
+            ? await loadImg(leftStage.toDataURL({ pixelRatio: 2 }))
+            : null;
+          const dr = rightStage
+            ? await loadImg(rightStage.toDataURL({ pixelRatio: 2 }))
+            : null;
+
+          if (!dl && !dr) return resolve(null);
+
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+
+          const wLeft = dl ? dl.width : 0;
+          const hLeft = dl ? dl.height : 0;
+          const wRight = dr ? dr.width : 0;
+          const hRight = dr ? dr.height : 0;
+
+          const totalWidth = wLeft + wRight;
+          const totalHeight = Math.max(hLeft, hRight);
+
+          canvas.width = totalWidth;
+          canvas.height = totalHeight;
+
+          // Fill background
+          ctx.fillStyle = "#F9FBFC";
+          ctx.fillRect(0, 0, totalWidth, totalHeight);
+
+          if (dl) ctx.drawImage(dl, 0, (totalHeight - hLeft) / 2);
+          if (dr) ctx.drawImage(dr, wLeft, (totalHeight - hRight) / 2);
+
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) resolve(null);
+              else
+                resolve(
+                  new File(
+                    [blob],
+                    fileName || `job-${jobId}-preview-annotated.png`,
+                    { type: "image/png" }
+                  )
+                );
+            },
+            "image/png",
+            1.0
+          );
+        };
+
+        generate();
+      } catch (e) {
+        console.error("Konva stage capture error:", e);
+        resolve(null);
+      }
+    });
   };
 
   return (
