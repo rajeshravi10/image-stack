@@ -705,32 +705,41 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
     setAnnotations((prev) => {
       const updated = prev.map((a) => {
         if (a.id !== id) return a;
-        const dx = node.x();
-        const dy = node.y();
-        node.x(0);
-        node.y(0);
         const newData = { ...a.data };
 
         if (a.tool === "rectangle") {
-          newData.x += dx;
-          newData.y += dy;
+          newData.x = node.x();
+          newData.y = node.y();
         } else if (a.tool === "ellipse") {
-          newData.cx += dx;
-          newData.cy += dy;
-        } else if (a.tool === "freehand" || a.tool === "highlight") {
-          newData.points = newData.points.map((p) => ({
-            x: p.x + dx,
-            y: p.y + dy,
-          }));
-        } else if (a.tool === "line" || a.tool === "arrow") {
-          newData.x1 += dx;
-          newData.y1 += dy;
-          newData.x2 += dx;
-          newData.y2 += dy;
+          newData.cx = node.x();
+          newData.cy = node.y();
         } else if (a.tool === "text") {
-          newData.x += dx;
-          newData.y += dy;
+          newData.x = node.x();
+          newData.y = node.y();
+        } else if (
+          a.tool === "freehand" ||
+          a.tool === "highlight" ||
+          a.tool === "line" ||
+          a.tool === "arrow"
+        ) {
+          const dx = node.x();
+          const dy = node.y();
+          if (a.tool === "freehand" || a.tool === "highlight") {
+            newData.points = newData.points.map((p) => ({
+              x: p.x + dx,
+              y: p.y + dy,
+            }));
+          } else {
+            newData.x1 += dx;
+            newData.y1 += dy;
+            newData.x2 += dx;
+            newData.y2 += dy;
+          }
+          // Reset internal delta since we just baked it directly into the points.
+          node.x(0);
+          node.y(0);
         }
+
         return { ...a, data: newData };
       });
       setUndoStack((prev2) => [...prev2, prev]);
