@@ -250,14 +250,39 @@ function AnnotationShape({
         <Text
           ref={shapeRef}
           {...commonProps}
+          name="textNode"
           x={ann.data.x}
           y={ann.data.y}
           text={ann.data.text || ""}
+          width={ann.data.width}
+          height={ann.data.height}
           fontSize={ann.data.fontSize || 18}
           fill={strokeColor}
           fontFamily="sans-serif"
           fontStyle="bold"
           opacity={opacity}
+          onTransform={(e) => {
+            const node = shapeRef.current;
+            const scaleX = node.scaleX();
+            const scaleY = node.scaleY();
+            const draggedHeight = node.height() * scaleY;
+
+            const newWidth = Math.max(node.width() * scaleX, 20);
+
+            // Unset height to get the natural wrapping height for the new width
+            node.setAttr("height", undefined);
+            node.width(newWidth);
+
+            const requiredHeight = node.height();
+            const finalHeight = Math.max(draggedHeight, requiredHeight);
+
+            node.setAttrs({
+              width: newWidth,
+              height: finalHeight,
+              scaleX: 1,
+              scaleY: 1,
+            });
+          }}
         />
       );
 
@@ -455,6 +480,8 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
       const node = stageRef.current.findOne(`#${selectedId}`);
       if (node) {
         transformerRef.current.nodes([node]);
+
+        // Disable rotation and correctly size text box if needed
         transformerRef.current.getLayer()?.batchDraw();
         return;
       }
@@ -776,10 +803,25 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
         } else if (a.tool === "text") {
           newData.x = node.x();
           newData.y = node.y();
-          newData.fontSize = Math.max(
-            8,
-            Math.round((a.data.fontSize || 18) * scaleY)
-          );
+
+          const draggedHeight = node.height() * scaleY;
+          const newWidth = Math.max(node.width() * scaleX, 20);
+
+          node.setAttr("height", undefined);
+          node.width(newWidth);
+
+          const requiredHeight = node.height();
+          const finalHeight = Math.max(draggedHeight, requiredHeight);
+
+          node.setAttrs({
+            width: newWidth,
+            height: finalHeight,
+            scaleX: 1,
+            scaleY: 1,
+          });
+
+          newData.width = newWidth;
+          newData.height = finalHeight;
         }
         node.x(newData.x || newData.cx || 0);
         node.y(newData.y || newData.cy || 0);
@@ -904,9 +946,32 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
               <Transformer
                 ref={transformerRef}
                 boundBoxFunc={(oldBox, newBox) => {
+                  if (activeTool === "select" && selectedId) {
+                    const node = stageRef.current?.findOne(`#${selectedId}`);
+                    if (node && node.name() === "textNode") {
+                      if (newBox.width < 20) {
+                        return oldBox;
+                      }
+                    }
+                  }
                   if (newBox.width < 5 || newBox.height < 5) return oldBox;
                   return newBox;
                 }}
+                enabledAnchors={
+                  stageRef.current?.findOne(`#${selectedId}`)?.name() ===
+                  "textNode"
+                    ? [
+                        "top-left",
+                        "top-right",
+                        "bottom-left",
+                        "bottom-right",
+                        "middle-left",
+                        "middle-right",
+                        "top-center",
+                        "bottom-center",
+                      ]
+                    : ["top-left", "top-right", "bottom-left", "bottom-right"]
+                }
                 rotateEnabled={false}
               />
             )}
