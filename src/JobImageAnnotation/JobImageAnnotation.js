@@ -38,6 +38,8 @@ import {
   annotationCommands,
   setGlobalCanUndo,
   setGlobalCanRedo,
+  hydrateSessionState,
+  saveSessionState,
 } from "./AnnotationGlobals";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -330,7 +332,11 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
   const opacity = toolSettings?.opacity != null ? toolSettings.opacity : 1;
 
   // ─── Annotations state ──────────────────────────────────────────────────────
-  const [annotations, setAnnotations] = useState([]);
+  const [annotations, setAnnotations] = useState(() => {
+    hydrateSessionState(jobId);
+    const key = imageId || imageName;
+    return globalAnnotationRegistry.get(key) || [];
+  });
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -416,9 +422,7 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
       annotations,
       selectedId,
     });
-    return () => {
-      globalAnnotationData.delete(key);
-    };
+    // Removed unmount cleanup to persist data across preview mode changes
   }, [imageId, imageName, imageSrc, jobId, annotations, selectedId]);
 
   // ─── Sync annotations to globalAnnotationRegistry ──────────────────────────
@@ -431,10 +435,12 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
       imageId: key,
     }));
     globalAnnotationRegistry.set(key, annotationsWithImageId);
-    return () => {
-      globalAnnotationRegistry.delete(key);
-    };
-  }, [imageId, imageName, annotations]);
+
+    // Save to session storage whenever annotations change
+    if (jobId) {
+      saveSessionState(jobId);
+    }
+  }, [imageId, imageName, annotations, jobId]);
 
   // ─── Update global undo/redo/selection state ─────────────────────────────────
   useEffect(() => {
@@ -658,10 +664,11 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
     }
 
     if (newAnn) {
-      const newList = [...annotations, newAnn];
-      setUndoStack((prev) => [...prev, annotations]);
-      setRedoStack([]);
-      setAnnotations(newList);
+      setAnnotations((prev) => {
+        setUndoStack((prevStack) => [...prevStack, prev]);
+        setRedoStack([]);
+        return [...prev, newAnn];
+      });
       setSelectedId(newAnn.id);
       // Broadcast selection globally so comments composer can link to it
       setGlobalSelectedAnn(newAnn.id);

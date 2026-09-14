@@ -299,7 +299,7 @@ const DetailsSidebarPOC = ({ jobData, onActiveTabChange = () => {} }) => {
           overflow: "hidden",
         }}
       >
-        <CommentsSection />
+        <CommentsSection jobId={jobData?.pulse_job_id} />
       </Box>
     </Box>
   );

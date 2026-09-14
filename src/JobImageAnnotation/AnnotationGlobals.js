@@ -29,6 +29,22 @@ export const globalAnnotationData = new Map();
 // Map keyed by imageId: Konva Stage ref for export
 export const globalStageRefs = new Map();
 
+// ── IN-MEMORY PERSISTENCE ONLY ──────────────────────────────────────────────
+// This preserves annotations/comments across tab switches during the same session,
+// but naturally wipes clean upon page refresh as requested.
+
+let globalComments = [];
+
+export const hydrateSessionState = () => {
+  return globalComments;
+};
+
+export const saveSessionState = (jobId, commentsOverride = null) => {
+  if (commentsOverride !== null) {
+    globalComments = commentsOverride;
+  }
+};
+
 const notify = () => listeners.forEach((fn) => fn());
 
 export const setGlobalIsAnnotating = (val) => {

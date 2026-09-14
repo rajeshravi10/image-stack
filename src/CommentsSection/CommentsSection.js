@@ -29,6 +29,8 @@ import {
   setGlobalHighlightedAnnotationId,
   setGlobalToolSettings,
   dispatchGridCommand,
+  hydrateSessionState,
+  saveSessionState,
 } from "../JobImageAnnotation/AnnotationGlobals";
 import AnnotationToolbar from "../JobImageAnnotation/AnnotationToolbar";
 
@@ -211,8 +213,8 @@ function CommentComposer({ selectedAnnotationId, onSubmit }) {
 
 // ─── Main CommentsSection ─────────────────────────────────────────────────────
 
-const CommentsSection = () => {
-  const [comments, setComments] = useState([]);
+const CommentsSection = ({ jobId }) => {
+  const [comments, setComments] = useState(() => hydrateSessionState(jobId));
   const [selectedCommentId, setLocalSelectedCommentId] = useState(null);
   const listEndRef = useRef(null);
   const commentRefs = useRef({});
@@ -235,19 +237,26 @@ const CommentsSection = () => {
   const setToolSettings = (settings) => setGlobalToolSettings(settings);
 
   // ── Handle comment submission ─────────────────────────────────────────────
-  const handleSubmit = useCallback((comment) => {
-    setComments((prev) => [...prev, comment]);
+  const handleSubmit = useCallback(
+    (comment) => {
+      setComments((prev) => {
+        const next = [...prev, comment];
+        if (jobId) saveSessionState(jobId, next);
+        return next;
+      });
 
-    // After submitting a comment linked to an annotation, reset the
-    // active annotation selection so the next comment doesn't accidentally
-    // link to the same annotation.  The annotation itself stays rendered.
-    if (comment.annotationId) {
-      setGlobalSelectedAnnotationId(null);
-      setGlobalHighlightedAnnotationId(null);
-      setGlobalSelectedCommentId(null);
-      setLocalSelectedCommentId(null);
-    }
-  }, []);
+      // After submitting a comment linked to an annotation, reset the
+      // active annotation selection so the next comment doesn't accidentally
+      // link to the same annotation.  The annotation itself stays rendered.
+      if (comment.annotationId) {
+        setGlobalSelectedAnnotationId(null);
+        setGlobalHighlightedAnnotationId(null);
+        setGlobalSelectedCommentId(null);
+        setLocalSelectedCommentId(null);
+      }
+    },
+    [jobId]
+  );
 
   // ── Auto-scroll to newest comment ─────────────────────────────────────────
   useEffect(() => {
@@ -263,37 +272,36 @@ const CommentsSection = () => {
     setGlobalSelectedCommentId(comment.id);
 
     // Normal comment
-    if (!comment.annotationId) {
+    if (!comment.annotationId || !comment.imageId) {
       setGlobalSelectedAnnotationId(null);
       setGlobalHighlightedAnnotationId(null);
       return;
     }
 
-    // Find the annotation
-    const ann = findAnnotationById(comment.annotationId);
-    if (!ann) {
-      setGlobalSelectedAnnotationId(null);
-      setGlobalHighlightedAnnotationId(null);
-      return;
-    }
+    // ALWAYS navigate using the comment's imageId explicitly as requested
+    window.dispatchEvent(
+      new CustomEvent("switch-image", { detail: comment.imageId })
+    );
 
-    // Make sure the annotation belongs to the same image
-    if (ann.imageId !== comment.imageId) {
-      setGlobalSelectedAnnotationId(null);
-      setGlobalHighlightedAnnotationId(null);
-      return;
-    }
-
-    // Switch preview to the annotation's image if required
-    if (ann.imageId) {
-      window.dispatchEvent(
-        new CustomEvent("switch-image", { detail: ann.imageId })
-      );
-    }
-
-    // Show ONLY this annotation (delay slightly for Konva stage boot up if switching)
+    // Delay checking and highlighting the annotation to allow preview to mount/change
     setTimeout(() => {
-      setGlobalSelectedAnnotationId(ann.id);
+      // Clear editing box immediately
+      setGlobalSelectedAnnotationId(null);
+
+      // Find the exact annotation using comment.annotationId
+      const ann = findAnnotationById(comment.annotationId);
+      if (!ann) {
+        setGlobalHighlightedAnnotationId(null);
+        return;
+      }
+
+      // Verify the found annotation's actual image matches the comment's declared image
+      if (ann.imageId !== comment.imageId) {
+        setGlobalHighlightedAnnotationId(null);
+        return;
+      }
+
+      // If securely matched, display the annotation visually
       setGlobalHighlightedAnnotationId(ann.id);
     }, 50);
   }, []);

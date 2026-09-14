@@ -93,35 +93,25 @@ const DragDropPOC = ({ jobData }) => {
   const initialPreview = allThumbs.find((t) => t.isSource)?.id ?? null;
   const [previewId, setPreviewId] = useState(initialPreview);
 
-  useEffect(() => {
-    // IMAGE CHANGE MUST RESET DISPLAYED ANNOTATION
-    setGlobalSelectedAnnotationId(null);
-    setGlobalHighlightedAnnotationId(null);
-  }, [previewId, sideBySideRef]);
-
   // Support for clicking comments that belong to other images
   useEffect(() => {
     const handleSwitchImage = (e) => {
       const id = e.detail;
       if (!id) return;
-      // If we are already displaying this image in current view, do not change layout
-      // But if it's completely out of view, switch the main preview to it
-      setPreviewId((currentPreview) => {
-        setSideBySideRef((currentSide) => {
-          if (currentPreview === id || currentSide === id) {
-            return currentSide;
-          }
-          return null; // exit side-by-side if switching entirely
-        });
 
-        // Return new preview if different, otherwise same
-        // We use function state updates so we can check currentSide without adding it as dependency
-        return id;
-      });
+      // If we are already displaying this image in current view, do not change layout
+      if (previewId === id || sideBySideRef === id) {
+        return;
+      }
+
+      // Otherwise, image is completely out of view. Switch main preview to it
+      // and exit side-by-side mode.
+      setPreviewId(id);
+      setSideBySideRef(null);
     };
     window.addEventListener("switch-image", handleSwitchImage);
     return () => window.removeEventListener("switch-image", handleSwitchImage);
-  }, []);
+  }, [previewId, sideBySideRef]);
 
   // For stack view accordions: controlled open state per type
   const [accordionsOpen, setAccordionsOpen] = useState({
@@ -172,6 +162,10 @@ const DragDropPOC = ({ jobData }) => {
     e.preventDefault();
     setIsDragOver(false);
 
+    // MANUAL IMAGE CHANGE MUST RESET DISPLAYED ANNOTATION
+    setGlobalSelectedAnnotationId(null);
+    setGlobalHighlightedAnnotationId(null);
+
     const dragged = dragItemRef.current;
     if (!dragged) return;
 
@@ -206,6 +200,10 @@ const DragDropPOC = ({ jobData }) => {
   };
 
   const onThumbClick = (thumb) => {
+    // MANUAL IMAGE CHANGE MUST RESET DISPLAYED ANNOTATION
+    setGlobalSelectedAnnotationId(null);
+    setGlobalHighlightedAnnotationId(null);
+
     setSideBySideRef(null);
     setPreviewId(thumb.id);
   };
@@ -468,6 +466,7 @@ const DragDropPOC = ({ jobData }) => {
                 }}
               >
                 <JobImageAnnotation
+                  key={previewThumb?.id || "fallback"}
                   imageSrc={previewThumb?.src}
                   imageName={previewThumb?.name}
                   jobId={jobData?.pulse_job_id}
@@ -497,6 +496,7 @@ const DragDropPOC = ({ jobData }) => {
                 }}
               >
                 <JobImageAnnotation
+                  key={sideBySideRef}
                   imageSrc={getThumbById(sideBySideRef)?.src}
                   imageName={getThumbById(sideBySideRef)?.name}
                   jobId={jobData?.pulse_job_id}
@@ -520,6 +520,7 @@ const DragDropPOC = ({ jobData }) => {
             }}
           >
             <JobImageAnnotation
+              key={previewThumb.id}
               imageSrc={previewThumb.src}
               imageName={previewThumb.name}
               jobId={jobData?.pulse_job_id}
