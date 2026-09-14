@@ -68,7 +68,6 @@ const DragDropPOC = ({ jobData }) => {
   const [thumbs, setThumbs] = useState(buildThumbs);
 
   const [checked, setChecked] = useState([]);
-  const [sideBySideRef, setSideBySideRef] = useState(null);
 
   const viewRef = useRef(null);
   const dragItemRef = useRef(null);
@@ -99,19 +98,14 @@ const DragDropPOC = ({ jobData }) => {
       const id = e.detail;
       if (!id) return;
 
-      // If we are already displaying this image in current view, do not change layout
-      if (previewId === id || sideBySideRef === id) {
+      if (previewId === id) {
         return;
       }
-
-      // Otherwise, image is completely out of view. Switch main preview to it
-      // and exit side-by-side mode.
       setPreviewId(id);
-      setSideBySideRef(null);
     };
     window.addEventListener("switch-image", handleSwitchImage);
     return () => window.removeEventListener("switch-image", handleSwitchImage);
-  }, [previewId, sideBySideRef]);
+  }, [previewId]);
 
   // For stack view accordions: controlled open state per type
   const [accordionsOpen, setAccordionsOpen] = useState({
@@ -169,33 +163,7 @@ const DragDropPOC = ({ jobData }) => {
     const dragged = dragItemRef.current;
     if (!dragged) return;
 
-    const rect = viewRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const isRight = x > rect.width / 2;
-
-    // SIDE-BY-SIDE logic retained
-    if (sideBySideRef) {
-      if (isRight) {
-        // drop on right → replace right
-        setSideBySideRef(dragged.id);
-      } else {
-        // drop on left → replace preview
-        setPreviewId(dragged.id);
-      }
-      // setClickedFull(null);
-      dragItemRef.current = null;
-      return;
-    }
-
-    // No side-by-side: open side-by-side with dragged and preview
-    if (isRight) {
-      setSideBySideRef(dragged.id);
-    } else {
-      setSideBySideRef(previewId);
-      setPreviewId(dragged.id);
-    }
-
-    // setClickedFull(null);
+    setPreviewId(dragged.id);
     dragItemRef.current = null;
   };
 
@@ -204,7 +172,6 @@ const DragDropPOC = ({ jobData }) => {
     setGlobalSelectedAnnotationId(null);
     setGlobalHighlightedAnnotationId(null);
 
-    setSideBySideRef(null);
     setPreviewId(thumb.id);
   };
 
@@ -427,88 +394,8 @@ const DragDropPOC = ({ jobData }) => {
         }}
       >
         {/* dashed preview drop divider */}
-        {isDragOver && (
-          <Box
-            sx={{
-              position: "absolute",
-              top: 0,
-              bottom: 0,
-              left: "50%",
-              width: 0,
-              borderLeft: "2px dashed #5465FF",
-              zIndex: 10,
-            }}
-          />
-        )}
-
-        {/* SIDE-BY-SIDE VIEW */}
-        {sideBySideRef && (
-          <>
-            {/* LEFT */}
-            {/* LEFT IMAGE */}
-            <Box
-              sx={{
-                flex: 1,
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                p: 2,
-              }}
-            >
-              <Box
-                sx={{
-                  position: "relative",
-                  width: "100%",
-                  height: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <JobImageAnnotation
-                  key={previewThumb?.id || "fallback"}
-                  imageSrc={previewThumb?.src}
-                  imageName={previewThumb?.name}
-                  jobId={jobData?.pulse_job_id}
-                  imageId={previewThumb?.id}
-                />
-              </Box>
-            </Box>
-
-            {/* RIGHT IMAGE */}
-            <Box
-              sx={{
-                flex: 1,
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                p: 2,
-              }}
-            >
-              <Box
-                sx={{
-                  position: "relative",
-                  width: "100%",
-                  height: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <JobImageAnnotation
-                  key={sideBySideRef}
-                  imageSrc={getThumbById(sideBySideRef)?.src}
-                  imageName={getThumbById(sideBySideRef)?.name}
-                  jobId={jobData?.pulse_job_id}
-                  imageId={sideBySideRef}
-                />
-              </Box>
-            </Box>
-          </>
-        )}
-
         {/* SINGLE VIEW — with annotation support (only for the primary job image) */}
-        {!sideBySideRef && previewThumb && (
+        {previewThumb && (
           <Box
             sx={{
               position: "relative",

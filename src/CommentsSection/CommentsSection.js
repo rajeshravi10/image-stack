@@ -49,7 +49,13 @@ function findAnnotationById(annotationId) {
 // ─── Single comment display ───────────────────────────────────────────────────
 
 function CommentCard({ comment, isSelected, onClick, commentRef }) {
-  const hasAnnotation = !!comment.annotationId;
+  const linkedAnnotation =
+    comment.annotationId && comment.imageId
+      ? (globalAnnotationRegistry.get(comment.imageId) || []).find(
+          (a) => a.id === comment.annotationId
+        )
+      : undefined;
+  const hasAnnotation = !!linkedAnnotation;
 
   return (
     <Box
@@ -89,21 +95,24 @@ function CommentCard({ comment, isSelected, onClick, commentRef }) {
       {/* Annotation indicator */}
       {hasAnnotation && (
         <Box sx={{ pl: "34px", mb: 0.5 }}>
-          <Chip
-            icon={<CropSquare sx={{ fontSize: 14 }} />}
-            label="Annotation"
-            size="small"
-            variant="outlined"
-            sx={{
-              height: 22,
-              fontSize: 11,
-              fontWeight: 500,
-              color: "#2680EB",
-              borderColor: "#2680EB40",
-              bgcolor: "#2680EB08",
-              "& .MuiChip-icon": { color: "#2680EB", ml: 0.5 },
-            }}
-          />
+          <Tooltip title="Annotation attached" arrow placement="top">
+            <Chip
+              icon={<CropSquare sx={{ fontSize: 14 }} />}
+              label="Annotation"
+              size="small"
+              variant="outlined"
+              sx={{
+                height: 22,
+                fontSize: 11,
+                fontWeight: 500,
+                color: "#2680EB",
+                borderColor: "#2680EB40",
+                bgcolor: "#2680EB08",
+                "& .MuiChip-icon": { color: "#2680EB", ml: 0.5 },
+                cursor: "inherit",
+              }}
+            />
+          </Tooltip>
         </Box>
       )}
 
@@ -163,7 +172,27 @@ function CommentComposer({ selectedAnnotationId, onSubmit }) {
       }}
     >
       {/* Text input row */}
-      <Box sx={{ display: "flex", alignItems: "flex-end", gap: 0.5 }}>
+      <Box sx={{ display: "flex", alignItems: "flex-end", gap: 1 }}>
+        {selectedAnnotationId && (
+          <Tooltip title="Attached to annotation" arrow placement="top">
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 32,
+                height: 32,
+                borderRadius: 1,
+                bgcolor: "#E8F0FE",
+                color: "#2680EB",
+                mb: 0.25,
+                border: "1px solid #2680EB40",
+              }}
+            >
+              <CropSquare sx={{ fontSize: 20 }} />
+            </Box>
+          </Tooltip>
+        )}
         <TextField
           multiline
           maxRows={4}

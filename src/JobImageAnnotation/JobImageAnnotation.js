@@ -543,6 +543,7 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
       y: (stageSize.height - h) / 2,
       width: w,
       height: h,
+      scale: w / nw,
     };
   };
 
@@ -552,8 +553,17 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
 
   const getStagePos = (e) => {
     const stage = stageRef.current;
-    const pos = stage.getPointerPosition();
-    return { x: pos?.x ?? 0, y: pos?.y ?? 0 };
+    if (!stage) return { x: 0, y: 0 };
+    const pos = stage.getRelativePointerPosition();
+
+    // Clamp rigorously to natural image bounds
+    let cx = pos?.x ?? 0;
+    let cy = pos?.y ?? 0;
+    if (konvaImage) {
+      cx = Math.max(0, Math.min(cx, konvaImage.naturalWidth));
+      cy = Math.max(0, Math.min(cy, konvaImage.naturalHeight));
+    }
+    return { x: cx, y: cy };
   };
 
   const handleStageMouseDown = (e) => {
@@ -794,22 +804,28 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
       {stageSize.width > 0 && stageSize.height > 0 && (
         <Stage
           ref={stageRef}
-          width={stageSize.width}
-          height={stageSize.height}
+          width={imageLayout.width}
+          height={imageLayout.height}
+          scaleX={imageLayout.scale || 1}
+          scaleY={imageLayout.scale || 1}
           onMouseDown={handleStageMouseDown}
           onMouseMove={handleStageMouseMove}
           onMouseUp={handleStageMouseUp}
-          style={{ position: "absolute", top: 0, left: 0 }}
+          style={{
+            position: "absolute",
+            top: imageLayout.y,
+            left: imageLayout.x,
+          }}
         >
           {/* Image Layer */}
           <Layer listening={false}>
             {konvaImage ? (
               <KonvaImage
                 image={konvaImage}
-                x={imageLayout.x}
-                y={imageLayout.y}
-                width={imageLayout.width}
-                height={imageLayout.height}
+                x={0}
+                y={0}
+                width={konvaImage.naturalWidth}
+                height={konvaImage.naturalHeight}
               />
             ) : null}
           </Layer>
