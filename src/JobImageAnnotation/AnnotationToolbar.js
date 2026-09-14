@@ -73,7 +73,7 @@ const AnnotationToolbar = ({
   const [settingsAnchor, setSettingsAnchor] = useState(null);
 
   const color = toolSettings.color || "#FF3B30";
-  const lineWidth = toolSettings.lineWidth || 3;
+  const lineWidth = toolSettings.lineWidth || 20;
   const opacity = toolSettings.opacity != null ? toolSettings.opacity : 1;
 
   const updateSettings = (patch) => {
@@ -241,9 +241,10 @@ const AnnotationToolbar = ({
         </Typography>
         <Slider
           size="small"
-          min={1}
-          max={20}
-          step={1}
+          min={5}
+          max={25}
+          step={5}
+          marks
           value={lineWidth}
           onChange={(_, v) => updateSettings({ lineWidth: v })}
           sx={{ mb: 1.5 }}

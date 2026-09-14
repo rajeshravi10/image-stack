@@ -115,7 +115,7 @@ function AnnotationShape({
   };
 
   const strokeColor = ann.color || "#FF3B30";
-  const strokeWidth = ann.lineWidth || 3;
+  const strokeWidth = ann.lineWidth || 20;
   const opacity = ann.opacity != null ? ann.opacity : 1;
 
   switch (ann.tool) {
@@ -163,9 +163,7 @@ function AnnotationShape({
           stroke={
             ann.tool === "highlight" ? ann.color || "#FFD600" : strokeColor
           }
-          strokeWidth={
-            ann.tool === "highlight" ? ann.lineWidth || 16 : strokeWidth
-          }
+          strokeWidth={strokeWidth}
           opacity={
             ann.tool === "highlight"
               ? ann.opacity != null
@@ -227,7 +225,7 @@ function InProgressShape({ state, tool, color, lineWidth }) {
   if (!state) return null;
   const { startX, startY, currentX, currentY, points } = state;
   const strokeColor = color || "#FF3B30";
-  const strokeWidth = lineWidth || 3;
+  const strokeWidth = lineWidth || 20;
 
   switch (tool) {
     case "rectangle": {
@@ -274,7 +272,7 @@ function InProgressShape({ state, tool, color, lineWidth }) {
         <Line
           points={pts}
           stroke={tool === "highlight" ? color || "#FFD600" : strokeColor}
-          strokeWidth={tool === "highlight" ? lineWidth || 16 : strokeWidth}
+          strokeWidth={strokeWidth}
           opacity={tool === "highlight" ? 0.38 : 1}
           lineCap="round"
           lineJoin="round"
@@ -334,7 +332,7 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
   } = useGlobalAnnotationMode();
 
   const color = toolSettings?.color || "#FF3B30";
-  const lineWidth = toolSettings?.lineWidth || 3;
+  const lineWidth = toolSettings?.lineWidth || 20;
   const opacity = toolSettings?.opacity != null ? toolSettings.opacity : 1;
 
   // ─── Annotations state ──────────────────────────────────────────────────────

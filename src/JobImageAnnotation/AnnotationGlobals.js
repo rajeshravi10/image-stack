@@ -6,7 +6,7 @@ let _isAnnotating = true;
 let _activeTool = "select";
 let _canUndo = false;
 let _canRedo = false;
-let _toolSettings = { color: "#FF3B30", lineWidth: 3, opacity: 1 };
+let _toolSettings = { color: "#FF3B30", lineWidth: 20, opacity: 1 };
 
 // ── NEW: Cross-component annotation↔comment linking state ──────────────────
 
