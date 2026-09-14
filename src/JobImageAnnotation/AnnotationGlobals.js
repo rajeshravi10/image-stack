@@ -2,12 +2,26 @@ import { useState, useEffect } from "react";
 
 const listeners = new Set();
 
-let _isAnnotating = false;
+let _isAnnotating = true;
 let _activeTool = "select";
 let _canUndo = false;
 let _canRedo = false;
-let _hasSelection = false;
 let _toolSettings = { color: "#FF3B30", lineWidth: 3, opacity: 1 };
+
+// ── NEW: Cross-component annotation↔comment linking state ──────────────────
+
+// Selected annotation ID (set from either annotation layer or comments panel)
+let _selectedAnnotationId = null;
+
+// Selected comment ID (set when a comment card is clicked)
+let _selectedCommentId = null;
+
+// Highlighted annotation ID (for temporary glow effect from comment click)
+let _highlightedAnnotationId = null;
+
+// Global registry: imageId → annotation[] (each JobImageAnnotation instance syncs here)
+// This allows the comments panel to look up annotations across all images
+export const globalAnnotationRegistry = new Map();
 
 // Map keyed by imageId: { annotations, imageSrc, imageName, jobId, selectedId }
 export const globalAnnotationData = new Map();
@@ -37,13 +51,23 @@ export const setGlobalCanRedo = (val) => {
   notify();
 };
 
-export const setGlobalHasSelection = (val) => {
-  _hasSelection = val;
+export const setGlobalToolSettings = (settings) => {
+  _toolSettings = { ..._toolSettings, ...settings };
   notify();
 };
 
-export const setGlobalToolSettings = (settings) => {
-  _toolSettings = { ..._toolSettings, ...settings };
+export const setGlobalSelectedAnnotationId = (id) => {
+  _selectedAnnotationId = id;
+  notify();
+};
+
+export const setGlobalSelectedCommentId = (id) => {
+  _selectedCommentId = id;
+  notify();
+};
+
+export const setGlobalHighlightedAnnotationId = (id) => {
+  _highlightedAnnotationId = id;
   notify();
 };
 
@@ -66,9 +90,14 @@ export const useGlobalAnnotationMode = () => {
     setActiveTool: setGlobalActiveTool,
     canUndo: _canUndo,
     canRedo: _canRedo,
-    hasSelection: _hasSelection,
     toolSettings: _toolSettings,
     setToolSettings: setGlobalToolSettings,
+    selectedAnnotationId: _selectedAnnotationId,
+    setSelectedAnnotationId: setGlobalSelectedAnnotationId,
+    selectedCommentId: _selectedCommentId,
+    setSelectedCommentId: setGlobalSelectedCommentId,
+    highlightedAnnotationId: _highlightedAnnotationId,
+    setHighlightedAnnotationId: setGlobalHighlightedAnnotationId,
   };
 };
 

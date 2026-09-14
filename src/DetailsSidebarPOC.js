@@ -22,16 +22,10 @@ import CommentsSection from "./CommentsSection/CommentsSection";
 
 /**
  * @param {Object} props
- * @param {Object}  props.jobData
- * @param {File|null} props.pendingAttachment       – annotated image from DragDropPOC
- * @param {Function}  props.onClearPendingAttachment
+ * @param {Object}   props.jobData
+ * @param {Function} props.onActiveTabChange
  */
-const DetailsSidebarPOC = ({
-  jobData,
-  pendingAttachment = null,
-  onClearPendingAttachment = () => {},
-  onActiveTabChange = () => {},
-}) => {
+const DetailsSidebarPOC = ({ jobData, onActiveTabChange = () => {} }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [basicOpen, setBasicOpen] = useState(true);
   const [instructionOpen, setInstructionOpen] = useState(true);
@@ -41,13 +35,6 @@ const DetailsSidebarPOC = ({
   useEffect(() => {
     onActiveTabChange(activeTab);
   }, [activeTab, onActiveTabChange]);
-
-  // Auto-switch to Comments tab when an annotated image is ready
-  useEffect(() => {
-    if (pendingAttachment) {
-      setActiveTab(1);
-    }
-  }, [pendingAttachment]);
 
   return (
     <Box
@@ -312,10 +299,7 @@ const DetailsSidebarPOC = ({
           overflow: "hidden",
         }}
       >
-        <CommentsSection
-          pendingAttachment={pendingAttachment}
-          onClearPendingAttachment={onClearPendingAttachment}
-        />
+        <CommentsSection />
       </Box>
     </Box>
   );

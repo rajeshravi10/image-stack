@@ -1,16 +1,16 @@
 /**
  * CommentsSection.js
  *
- * A self-contained comments panel that supports:
- * - Text-only comments
- * - Comments with an image attachment (e.g. an annotated job image)
+ * A comments panel that supports:
+ * - Text-only comments (unlinked)
+ * - Comments linked to annotations via annotationId
  *
- * Props:
- *   pendingAttachment: File | null  – set externally when "Add to Comment" fires
- *   onClearPendingAttachment: () => void
+ * When an annotation is selected (globally), submitting a comment links
+ * that comment to the annotation. Clicking a comment highlights its
+ * linked annotation on the correct image.
  */
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -18,31 +18,52 @@ import {
   IconButton,
   Tooltip,
   Avatar,
+  Chip,
 } from "@mui/material";
+import { SendOutlined, ImageOutlined, CropSquare } from "@mui/icons-material";
 import {
-  SendOutlined,
-  DeleteOutline,
-  AttachFile,
-  ImageOutlined,
-} from "@mui/icons-material";
-import ImageLightbox from "./ImageLightbox";
-
-/**
- * @typedef {import('../JobImageAnnotation/types').JobComment} JobComment
- * @typedef {import('../JobImageAnnotation/types').CommentAttachment} CommentAttachment
- */
+  useGlobalAnnotationMode,
+  globalAnnotationRegistry,
+  setGlobalSelectedAnnotationId,
+  setGlobalSelectedCommentId,
+  setGlobalHighlightedAnnotationId,
+  setGlobalToolSettings,
+  dispatchGridCommand,
+} from "../JobImageAnnotation/AnnotationGlobals";
+import AnnotationToolbar from "../JobImageAnnotation/AnnotationToolbar";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+// ─── Helper: find annotation across all images ────────────────────────────────
+
+function findAnnotationById(annotationId) {
+  for (const [imageId, annotations] of globalAnnotationRegistry.entries()) {
+    const ann = annotations.find((a) => a.id === annotationId);
+    if (ann) return { ...ann, imageId };
+  }
+  return null;
+}
+
 // ─── Single comment display ───────────────────────────────────────────────────
 
-function CommentCard({ comment, onImageClick }) {
+function CommentCard({ comment, isSelected, onClick, commentRef }) {
+  const hasAnnotation = !!comment.annotationId;
+
   return (
     <Box
+      ref={commentRef}
+      onClick={onClick}
       sx={{
         px: 2,
         py: 1.5,
         borderBottom: "1px solid #F0F0F0",
+        cursor: "pointer",
+        background: isSelected ? "#E8F0FE" : "transparent",
+        borderLeft: isSelected ? "3px solid #2680EB" : "3px solid transparent",
+        transition: "background 0.2s, border-left 0.2s",
+        "&:hover": {
+          background: isSelected ? "#E8F0FE" : "#F5F8FF",
+        },
         "&:last-child": { borderBottom: "none" },
       }}
     >
@@ -63,6 +84,27 @@ function CommentCard({ comment, onImageClick }) {
         </Typography>
       </Box>
 
+      {/* Annotation indicator */}
+      {hasAnnotation && (
+        <Box sx={{ pl: "34px", mb: 0.5 }}>
+          <Chip
+            icon={<CropSquare sx={{ fontSize: 14 }} />}
+            label="Annotation"
+            size="small"
+            variant="outlined"
+            sx={{
+              height: 22,
+              fontSize: 11,
+              fontWeight: 500,
+              color: "#2680EB",
+              borderColor: "#2680EB40",
+              bgcolor: "#2680EB08",
+              "& .MuiChip-icon": { color: "#2680EB", ml: 0.5 },
+            }}
+          />
+        </Box>
+      )}
+
       {comment.text && (
         <Typography
           sx={{ fontSize: 13, color: "text.primary", mb: 0.5, pl: "34px" }}
@@ -70,125 +112,40 @@ function CommentCard({ comment, onImageClick }) {
           {comment.text}
         </Typography>
       )}
-
-      {comment.attachments?.map(
-        (att) =>
-          att.type === "image" && (
-            <Box key={att.id} sx={{ pl: "34px", mt: 0.5 }}>
-              <Box
-                component="img"
-                src={att.url}
-                alt={att.name || "Annotated image"}
-                sx={{
-                  maxWidth: "100%",
-                  maxHeight: 240,
-                  objectFit: "contain",
-                  borderRadius: 1,
-                  border: "1px solid #E0E0E0",
-                  display: "block",
-                  cursor: "pointer",
-                  transition: "opacity 0.2s, filter 0.2s",
-                  "&:hover": {
-                    opacity: 0.9,
-                    filter: "brightness(0.9)",
-                  },
-                }}
-                onClick={() => onImageClick({ src: att.url, alt: att.name })}
-              />
-              <Typography
-                sx={{ fontSize: 11, color: "text.secondary", mt: 0.25 }}
-              >
-                {att.name}
-              </Typography>
-            </Box>
-          )
-      )}
     </Box>
   );
 }
 
 // ─── Composer ─────────────────────────────────────────────────────────────────
 
-function CommentComposer({
-  pendingAttachment,
-  onClearPendingAttachment,
-  onSubmit,
-  onImageClick,
-}) {
+function CommentComposer({ selectedAnnotationId, onSubmit }) {
   const [text, setText] = useState("");
-  const [attachmentPreviewUrl, setAttachmentPreviewUrl] = useState(null);
-  const [attachmentFile, setAttachmentFile] = useState(null);
-  const fileInputRef = useRef(null);
-
-  // When parent supplies a new attachment (annotated image), adopt it
-  useEffect(() => {
-    if (!pendingAttachment) return;
-
-    // Clean up old blob URL
-    if (attachmentPreviewUrl) URL.revokeObjectURL(attachmentPreviewUrl);
-
-    const url = URL.createObjectURL(pendingAttachment);
-    setAttachmentPreviewUrl(url);
-    setAttachmentFile(pendingAttachment);
-    onClearPendingAttachment(); // tell parent we've consumed it
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingAttachment]);
-
-  // Clean up on unmount
-  useEffect(() => {
-    return () => {
-      if (attachmentPreviewUrl) URL.revokeObjectURL(attachmentPreviewUrl);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const removeAttachment = () => {
-    if (attachmentPreviewUrl) URL.revokeObjectURL(attachmentPreviewUrl);
-    setAttachmentPreviewUrl(null);
-    setAttachmentFile(null);
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (attachmentPreviewUrl) URL.revokeObjectURL(attachmentPreviewUrl);
-    const url = URL.createObjectURL(file);
-    setAttachmentPreviewUrl(url);
-    setAttachmentFile(file);
-    e.target.value = "";
-  };
 
   const handleSubmit = () => {
-    if (!text.trim() && !attachmentFile) return;
+    if (!text.trim()) return;
 
-    /** @type {CommentAttachment[]} */
-    const attachments = attachmentFile
-      ? [
-          {
-            id: uid(),
-            type: "image",
-            name: attachmentFile.name,
-            url: attachmentPreviewUrl, // blob URL lives as long as this session
-            file: attachmentFile,
-          },
-        ]
-      : [];
+    // Look up the annotation to get the imageId
+    let imageId = null;
+    if (selectedAnnotationId) {
+      const ann = findAnnotationById(selectedAnnotationId);
+      if (ann) {
+        imageId = ann.imageId;
+      }
+    }
 
-    /** @type {JobComment} */
     const comment = {
       id: uid(),
       text: text.trim(),
-      attachments,
+      annotationId: selectedAnnotationId || null,
+      imageId: imageId,
+      versionId: null, // prepared for future version support
       createdAt: new Date().toISOString(),
       author: "Rajesh",
+      status: "open",
     };
 
     onSubmit(comment);
     setText("");
-    // NOTE: We intentionally keep the blob URL alive in the comment list
-    // so the image keeps rendering.  We do NOT revoke it here.
-    setAttachmentPreviewUrl(null);
-    setAttachmentFile(null);
   };
 
   return (
@@ -203,73 +160,6 @@ function CommentComposer({
         gap: 1,
       }}
     >
-      {/* Attachment preview */}
-      {attachmentPreviewUrl && (
-        <Box
-          sx={{
-            position: "relative",
-            border: "1px solid #D9DADB",
-            borderRadius: 1,
-            overflow: "hidden",
-            background: "#fafafa",
-          }}
-        >
-          <Box
-            component="img"
-            src={attachmentPreviewUrl}
-            alt="Attachment preview"
-            sx={{
-              width: "100%",
-              maxHeight: 160,
-              objectFit: "contain",
-              display: "block",
-              cursor: "pointer",
-              transition: "opacity 0.2s, filter 0.2s",
-              "&:hover": {
-                opacity: 0.9,
-                filter: "brightness(0.9)",
-              },
-            }}
-            onClick={() =>
-              onImageClick({
-                src: attachmentPreviewUrl,
-                alt: attachmentFile?.name,
-              })
-            }
-          />
-          <Tooltip title="Remove attachment">
-            <IconButton
-              size="small"
-              onClick={removeAttachment}
-              sx={{
-                position: "absolute",
-                top: 4,
-                right: 4,
-                background: "rgba(0,0,0,0.5)",
-                color: "#fff",
-                "&:hover": { background: "rgba(0,0,0,0.7)" },
-                p: 0.25,
-              }}
-            >
-              <DeleteOutline sx={{ fontSize: 16 }} />
-            </IconButton>
-          </Tooltip>
-          {attachmentFile && (
-            <Typography
-              sx={{
-                fontSize: 10,
-                color: "text.secondary",
-                px: 1,
-                pb: 0.5,
-                background: "#fafafa",
-              }}
-            >
-              {attachmentFile.name}
-            </Typography>
-          )}
-        </Box>
-      )}
-
       {/* Text input row */}
       <Box sx={{ display: "flex", alignItems: "flex-end", gap: 0.5 }}>
         <TextField
@@ -293,39 +183,19 @@ function CommentComposer({
           }}
         />
 
-        {/* File attach button */}
-        <Tooltip title="Attach image">
-          <IconButton
-            size="small"
-            onClick={() => fileInputRef.current?.click()}
-            sx={{ mb: 0.25 }}
-          >
-            <AttachFile sx={{ fontSize: 18 }} />
-          </IconButton>
-        </Tooltip>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          style={{ display: "none" }}
-          onChange={handleFileChange}
-        />
-
         {/* Send */}
         <Tooltip title="Add Comment (Enter)">
           <span>
             <IconButton
               size="small"
               onClick={handleSubmit}
-              disabled={!text.trim() && !attachmentFile}
+              disabled={!text.trim()}
               sx={{
                 mb: 0.25,
-                background:
-                  !text.trim() && !attachmentFile ? undefined : "#2680EB",
-                color: !text.trim() && !attachmentFile ? undefined : "#fff",
+                background: !text.trim() ? undefined : "#2680EB",
+                color: !text.trim() ? undefined : "#fff",
                 "&:hover": {
-                  background:
-                    !text.trim() && !attachmentFile ? undefined : "#1a6dd4",
+                  background: !text.trim() ? undefined : "#1a6dd4",
                 },
                 borderRadius: 1,
               }}
@@ -341,34 +211,129 @@ function CommentComposer({
 
 // ─── Main CommentsSection ─────────────────────────────────────────────────────
 
-/**
- * @param {Object} props
- * @param {File|null} props.pendingAttachment           - annotated image file from parent
- * @param {Function}  props.onClearPendingAttachment    - tell parent the file was consumed
- */
-const CommentsSection = ({ pendingAttachment, onClearPendingAttachment }) => {
+const CommentsSection = () => {
   const [comments, setComments] = useState([]);
+  const [selectedCommentId, setLocalSelectedCommentId] = useState(null);
   const listEndRef = useRef(null);
+  const commentRefs = useRef({});
 
-  // Lightbox state
-  const [lightbox, setLightbox] = useState({ open: false, src: "", alt: "" });
+  // Track whether the last selectedAnnotationId change came from a comment click
+  // so we can distinguish it from "user just drew a new annotation"
+  const commentClickedRef = useRef(false);
 
-  const handleImageClick = ({ src, alt }) => {
-    setLightbox({ open: true, src, alt });
-  };
+  const {
+    selectedAnnotationId,
+    activeTool,
+    setActiveTool,
+    canUndo,
+    canRedo,
+    toolSettings,
+  } = useGlobalAnnotationMode();
 
-  const closeLightbox = () => {
-    setLightbox((prev) => ({ ...prev, open: false }));
-  };
+  const handleUndo = () => dispatchGridCommand("undo");
+  const handleRedo = () => dispatchGridCommand("redo");
+  const setToolSettings = (settings) => setGlobalToolSettings(settings);
 
-  const handleSubmit = (comment) => {
+  // ── Handle comment submission ─────────────────────────────────────────────
+  const handleSubmit = useCallback((comment) => {
     setComments((prev) => [...prev, comment]);
-  };
 
-  // Auto-scroll to newest comment
+    // After submitting a comment linked to an annotation, reset the
+    // active annotation selection so the next comment doesn't accidentally
+    // link to the same annotation.  The annotation itself stays rendered.
+    if (comment.annotationId) {
+      setGlobalSelectedAnnotationId(null);
+      setGlobalHighlightedAnnotationId(null);
+      setGlobalSelectedCommentId(null);
+      setLocalSelectedCommentId(null);
+    }
+  }, []);
+
+  // ── Auto-scroll to newest comment ─────────────────────────────────────────
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [comments]);
+
+  // ── Click comment → highlight annotation ──────────────────────────────────
+  const handleCommentClick = useCallback((comment) => {
+    // Mark that this selection change was triggered by a comment click
+    commentClickedRef.current = true;
+
+    setLocalSelectedCommentId(comment.id);
+    setGlobalSelectedCommentId(comment.id);
+
+    // Normal comment
+    if (!comment.annotationId) {
+      setGlobalSelectedAnnotationId(null);
+      setGlobalHighlightedAnnotationId(null);
+      return;
+    }
+
+    // Find the annotation
+    const ann = findAnnotationById(comment.annotationId);
+    if (!ann) {
+      setGlobalSelectedAnnotationId(null);
+      setGlobalHighlightedAnnotationId(null);
+      return;
+    }
+
+    // Make sure the annotation belongs to the same image
+    if (ann.imageId !== comment.imageId) {
+      setGlobalSelectedAnnotationId(null);
+      setGlobalHighlightedAnnotationId(null);
+      return;
+    }
+
+    // Switch preview to the annotation's image if required
+    if (ann.imageId) {
+      window.dispatchEvent(
+        new CustomEvent("switch-image", { detail: ann.imageId })
+      );
+    }
+
+    // Show ONLY this annotation (delay slightly for Konva stage boot up if switching)
+    setTimeout(() => {
+      setGlobalSelectedAnnotationId(ann.id);
+      setGlobalHighlightedAnnotationId(ann.id);
+    }, 50);
+  }, []);
+
+  // ── Click annotation → scroll to linked comment ──────────────────────────
+  // Watch for changes in selectedAnnotationId (from annotation layer clicks)
+  useEffect(() => {
+    if (!selectedAnnotationId) {
+      // When selection is cleared (e.g. after comment submit), deselect comment too
+      setLocalSelectedCommentId(null);
+      return;
+    }
+
+    // If this change was caused by a comment click, skip the reverse-lookup
+    // (the comment is already selected)
+    if (commentClickedRef.current) {
+      commentClickedRef.current = false;
+      return;
+    }
+
+    // Find a comment linked to this annotation
+    const linkedComment = comments.find(
+      (c) => c.annotationId === selectedAnnotationId
+    );
+
+    if (linkedComment) {
+      setLocalSelectedCommentId(linkedComment.id);
+      setGlobalSelectedCommentId(linkedComment.id);
+
+      // Scroll to the comment
+      const ref = commentRefs.current[linkedComment.id];
+      if (ref) {
+        ref.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    } else {
+      // No linked comment → clear comment selection (annotation is newly drawn)
+      setLocalSelectedCommentId(null);
+      setGlobalSelectedCommentId(null);
+    }
+  }, [selectedAnnotationId, comments]);
 
   return (
     <Box
@@ -401,32 +366,45 @@ const CommentsSection = ({ pendingAttachment, onClearPendingAttachment }) => {
             <Typography
               sx={{ fontSize: 12, opacity: 0.5, textAlign: "center", px: 2 }}
             >
-              Annotate the job image and add it as a comment.
+              Draw an annotation and add a comment to link them.
             </Typography>
           </Box>
         )}
 
         {comments.map((c) => (
-          <CommentCard key={c.id} comment={c} onImageClick={handleImageClick} />
+          <CommentCard
+            key={c.id}
+            comment={c}
+            isSelected={c.id === selectedCommentId}
+            onClick={() => handleCommentClick(c)}
+            commentRef={(el) => {
+              commentRefs.current[c.id] = el;
+            }}
+          />
         ))}
         <div ref={listEndRef} />
       </Box>
 
       {/* Composer */}
       <CommentComposer
-        pendingAttachment={pendingAttachment}
-        onClearPendingAttachment={onClearPendingAttachment}
+        selectedAnnotationId={selectedAnnotationId}
         onSubmit={handleSubmit}
-        onImageClick={handleImageClick}
       />
 
-      {/* Lightbox */}
-      <ImageLightbox
-        open={lightbox.open}
-        src={lightbox.src}
-        alt={lightbox.alt}
-        onClose={closeLightbox}
-      />
+      {/* Annotation Tools */}
+      <Box sx={{ borderTop: "1px solid #D9DADB", background: "#F9FBFC", p: 1 }}>
+        <AnnotationToolbar
+          activeTool={activeTool}
+          onToolChange={(t) => setActiveTool(t)}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          onCancel={() => {}} // No close needed
+          toolSettings={toolSettings}
+          onToolSettingsChange={setToolSettings}
+        />
+      </Box>
     </Box>
   );
 };

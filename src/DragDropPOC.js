@@ -24,10 +24,12 @@ import BrLogo from "./assets/logos/Br-logo.png";
 
 import { getStaticJobMapping } from "./jobImageMapping";
 import JobImageAnnotation from "./JobImageAnnotation/JobImageAnnotation";
-import AnnotationHeaderControl from "./JobImageAnnotation/AnnotationHeaderControl";
-import { globalStageRefs } from "./JobImageAnnotation/AnnotationGlobals";
+import {
+  setGlobalSelectedAnnotationId,
+  setGlobalHighlightedAnnotationId,
+} from "./JobImageAnnotation/AnnotationGlobals";
 
-const DragDropPOC = ({ jobData, onAnnotatedImage, isCommentsTabActive }) => {
+const DragDropPOC = ({ jobData }) => {
   const jobId = jobData?.pulse_job_id;
   const mapping = getStaticJobMapping(jobId);
 
@@ -90,6 +92,36 @@ const DragDropPOC = ({ jobData, onAnnotatedImage, isCommentsTabActive }) => {
   // preview tracking (default to job file)
   const initialPreview = allThumbs.find((t) => t.isSource)?.id ?? null;
   const [previewId, setPreviewId] = useState(initialPreview);
+
+  useEffect(() => {
+    // IMAGE CHANGE MUST RESET DISPLAYED ANNOTATION
+    setGlobalSelectedAnnotationId(null);
+    setGlobalHighlightedAnnotationId(null);
+  }, [previewId, sideBySideRef]);
+
+  // Support for clicking comments that belong to other images
+  useEffect(() => {
+    const handleSwitchImage = (e) => {
+      const id = e.detail;
+      if (!id) return;
+      // If we are already displaying this image in current view, do not change layout
+      // But if it's completely out of view, switch the main preview to it
+      setPreviewId((currentPreview) => {
+        setSideBySideRef((currentSide) => {
+          if (currentPreview === id || currentSide === id) {
+            return currentSide;
+          }
+          return null; // exit side-by-side if switching entirely
+        });
+
+        // Return new preview if different, otherwise same
+        // We use function state updates so we can check currentSide without adding it as dependency
+        return id;
+      });
+    };
+    window.addEventListener("switch-image", handleSwitchImage);
+    return () => window.removeEventListener("switch-image", handleSwitchImage);
+  }, []);
 
   // For stack view accordions: controlled open state per type
   const [accordionsOpen, setAccordionsOpen] = useState({
@@ -360,92 +392,6 @@ const DragDropPOC = ({ jobData, onAnnotatedImage, isCommentsTabActive }) => {
     );
   };
 
-  // ======================================================
-  // PREVIEW FLATTENING USING NATIVE KONVA
-  // ======================================================
-  const handleCapturePreview = async (fileName) => {
-    return new Promise((resolve) => {
-      try {
-        const leftStageNode = previewThumb
-          ? globalStageRefs.get(previewThumb.id)
-          : null;
-        const rightStageNode = sideBySideRef
-          ? globalStageRefs.get(sideBySideRef)
-          : null;
-
-        const leftStage = leftStageNode?.current;
-        const rightStage = rightStageNode?.current;
-
-        if (!leftStage && !rightStage) {
-          resolve(null);
-          return;
-        }
-
-        const loadImg = (dataUrl) => {
-          return new Promise((res) => {
-            if (!dataUrl) return res(null);
-            const img = new Image();
-            img.onload = () => res(img);
-            img.src = dataUrl;
-          });
-        };
-
-        const generate = async () => {
-          const dl = leftStage
-            ? await loadImg(leftStage.toDataURL({ pixelRatio: 2 }))
-            : null;
-          const dr = rightStage
-            ? await loadImg(rightStage.toDataURL({ pixelRatio: 2 }))
-            : null;
-
-          if (!dl && !dr) return resolve(null);
-
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
-
-          const wLeft = dl ? dl.width : 0;
-          const hLeft = dl ? dl.height : 0;
-          const wRight = dr ? dr.width : 0;
-          const hRight = dr ? dr.height : 0;
-
-          const totalWidth = wLeft + wRight;
-          const totalHeight = Math.max(hLeft, hRight);
-
-          canvas.width = totalWidth;
-          canvas.height = totalHeight;
-
-          // Fill background
-          ctx.fillStyle = "#F9FBFC";
-          ctx.fillRect(0, 0, totalWidth, totalHeight);
-
-          if (dl) ctx.drawImage(dl, 0, (totalHeight - hLeft) / 2);
-          if (dr) ctx.drawImage(dr, wLeft, (totalHeight - hRight) / 2);
-
-          canvas.toBlob(
-            (blob) => {
-              if (!blob) resolve(null);
-              else
-                resolve(
-                  new File(
-                    [blob],
-                    fileName || `job-${jobId}-preview-annotated.png`,
-                    { type: "image/png" }
-                  )
-                );
-            },
-            "image/png",
-            1.0
-          );
-        };
-
-        generate();
-      } catch (e) {
-        console.error("Konva stage capture error:", e);
-        resolve(null);
-      }
-    });
-  };
-
   return (
     <Box
       sx={{
@@ -456,33 +402,6 @@ const DragDropPOC = ({ jobData, onAnnotatedImage, isCommentsTabActive }) => {
         overflow: "hidden",
       }}
     >
-      <AnnotationHeaderControl
-        isCommentsTabActive={isCommentsTabActive}
-        onCapturePreview={async (type) => {
-          // Capture the whole DOM element preview space
-          const fileName = `job-${jobId || "unknown"}-preview-annotated.png`;
-          const file = await handleCapturePreview(fileName);
-
-          if (!file) {
-            alert("Capturing the preview failed.");
-            return;
-          }
-
-          if (type === "comment") {
-            onAnnotatedImage(file, []);
-          } else if (type === "export") {
-            const url = URL.createObjectURL(file);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = file.name;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            setTimeout(() => URL.revokeObjectURL(url), 100);
-          }
-        }}
-      />
-
       {/* ======================================================
         PREVIEW AREA (unchanged full-height section)
     ======================================================= */}

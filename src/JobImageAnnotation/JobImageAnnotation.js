@@ -5,7 +5,10 @@
  * annotation layer on top.
  *
  * Supported tools:
- *   select, rectangle, ellipse, freehand, line, arrow, text, highlight
+ *   select, rectangle, ellipse, freehand, line, arrow, highlight
+ *
+ * Annotations are first-class data objects linked to comments via
+ * globalAnnotationRegistry and AnnotationGlobals state.
  */
 
 import React, {
@@ -25,100 +28,62 @@ import {
   Ellipse,
   Line,
   Arrow,
-  Text,
   Transformer,
 } from "react-konva";
 import {
   useGlobalAnnotationMode,
   globalAnnotationData,
+  globalAnnotationRegistry,
   globalStageRefs,
   annotationCommands,
   setGlobalCanUndo,
   setGlobalCanRedo,
-  setGlobalHasSelection,
 } from "./AnnotationGlobals";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-// ─── Text Edit Popover ────────────────────────────────────────────────────────
+// ─── Highlight ring for annotation selected via comment click ─────────────────
 
-function TextInputPopover({ pos, onConfirm, onCancel }) {
-  const [val, setVal] = useState("");
-  const inputRef = useRef(null);
+function HighlightRing({ ann, isHighlighted }) {
+  if (!isHighlighted) return null;
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  const pad = 6;
 
-  const handleKey = (e) => {
-    if (e.key === "Enter") onConfirm(val);
-    if (e.key === "Escape") onCancel();
-  };
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: pos.x,
-        top: pos.y,
-        zIndex: 1000,
-        background: "#fff",
-        border: "1px solid #D9DADB",
-        borderRadius: 6,
-        boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
-        padding: "8px 10px",
-        display: "flex",
-        gap: 6,
-        alignItems: "center",
-      }}
-    >
-      <input
-        ref={inputRef}
-        value={val}
-        onChange={(e) => setVal(e.target.value)}
-        onKeyDown={handleKey}
-        placeholder="Enter text…"
-        style={{
-          border: "1px solid #ccc",
-          borderRadius: 4,
-          padding: "4px 8px",
-          fontSize: 14,
-          outline: "none",
-          minWidth: 180,
-        }}
+  if (ann.tool === "rectangle") {
+    return (
+      <Rect
+        x={ann.data.x - pad}
+        y={ann.data.y - pad}
+        width={ann.data.width + pad * 2}
+        height={ann.data.height + pad * 2}
+        stroke="#2680EB"
+        strokeWidth={2.5}
+        dash={[6, 3]}
+        cornerRadius={4}
+        listening={false}
+        opacity={0.85}
       />
-      <button
-        onClick={() => onConfirm(val)}
-        style={{
-          background: "#2680EB",
-          color: "#fff",
-          border: "none",
-          borderRadius: 4,
-          padding: "4px 10px",
-          cursor: "pointer",
-          fontSize: 13,
-        }}
-      >
-        OK
-      </button>
-      <button
-        onClick={onCancel}
-        style={{
-          background: "#f0f0f0",
-          color: "#333",
-          border: "none",
-          borderRadius: 4,
-          padding: "4px 8px",
-          cursor: "pointer",
-          fontSize: 13,
-        }}
-      >
-        ✕
-      </button>
-    </div>
-  );
+    );
+  }
+  if (ann.tool === "ellipse") {
+    return (
+      <Ellipse
+        x={ann.data.cx}
+        y={ann.data.cy}
+        radiusX={Math.abs(ann.data.rx) + pad}
+        radiusY={Math.abs(ann.data.ry) + pad}
+        stroke="#2680EB"
+        strokeWidth={2.5}
+        dash={[6, 3]}
+        listening={false}
+        opacity={0.85}
+      />
+    );
+  }
+  // For lines/arrows/freehand/highlight – just skip the ring (selection is enough)
+  return null;
 }
 
 // ─── Render a single annotation shape ────────────────────────────────────────
@@ -245,47 +210,6 @@ function AnnotationShape({
       );
     }
 
-    case "text":
-      return (
-        <Text
-          ref={shapeRef}
-          {...commonProps}
-          name="textNode"
-          x={ann.data.x}
-          y={ann.data.y}
-          text={ann.data.text || ""}
-          width={ann.data.width}
-          height={ann.data.height}
-          fontSize={ann.data.fontSize || 18}
-          fill={strokeColor}
-          fontFamily="sans-serif"
-          fontStyle="bold"
-          opacity={opacity}
-          onTransform={(e) => {
-            const node = shapeRef.current;
-            const scaleX = node.scaleX();
-            const scaleY = node.scaleY();
-            const draggedHeight = node.height() * scaleY;
-
-            const newWidth = Math.max(node.width() * scaleX, 20);
-
-            // Unset height to get the natural wrapping height for the new width
-            node.setAttr("height", undefined);
-            node.width(newWidth);
-
-            const requiredHeight = node.height();
-            const finalHeight = Math.max(draggedHeight, requiredHeight);
-
-            node.setAttrs({
-              width: newWidth,
-              height: finalHeight,
-              scaleX: 1,
-              scaleY: 1,
-            });
-          }}
-        />
-      );
-
     default:
       return null;
   }
@@ -388,11 +312,18 @@ function InProgressShape({ state, tool, color, lineWidth }) {
  * @param {string}  props.imageName
  * @param {string}  props.jobId
  * @param {string}  props.imageId
- * @param {Object}  props.toolSettings  – { color, lineWidth, opacity }
  */
 const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
-  const { isAnnotating, activeTool, setActiveTool, toolSettings } =
-    useGlobalAnnotationMode();
+  const {
+    isAnnotating,
+    activeTool,
+    setActiveTool,
+    toolSettings,
+    selectedAnnotationId: globalSelectedAnnotationId,
+    highlightedAnnotationId,
+    setSelectedAnnotationId: setGlobalSelectedAnn,
+    setHighlightedAnnotationId: setGlobalHighlightedAnn,
+  } = useGlobalAnnotationMode();
 
   const color = toolSettings?.color || "#FF3B30";
   const lineWidth = toolSettings?.lineWidth || 3;
@@ -404,7 +335,6 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
   const [redoStack, setRedoStack] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [drawState, setDrawState] = useState(null);
-  const [textPending, setTextPending] = useState(null);
 
   // Konva refs
   const stageRef = useRef(null);
@@ -414,6 +344,34 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
 
   // Image element for Konva
   const [konvaImage, setKonvaImage] = useState(null);
+
+  // ─── Sync selectedId ↔ global selectedAnnotationId ──────────────────────────
+  // When local selection changes, broadcast to global state
+  useEffect(() => {
+    if (selectedId) {
+      const ann = annotations.find((a) => a.id === selectedId);
+      if (ann) {
+        setGlobalSelectedAnn(selectedId);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
+  // When global selectedAnnotationId changes (e.g. from comment click or cancel),
+  // select the annotation in this instance if it belongs here, otherwise clear it.
+  useEffect(() => {
+    if (!globalSelectedAnnotationId) {
+      setSelectedId(null);
+      return;
+    }
+    const ann = annotations.find((a) => a.id === globalSelectedAnnotationId);
+    if (ann) {
+      setSelectedId(globalSelectedAnnotationId);
+    } else {
+      setSelectedId(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globalSelectedAnnotationId, annotations]);
 
   // ─── Container resize observer ───────────────────────────────────────────────
   useLayoutEffect(() => {
@@ -439,7 +397,7 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
     img.src = imageSrc;
   }, [imageSrc]);
 
-  // ─── Register stage ref for export ──────────────────────────────────────────
+  // ─── Register stage ref ─────────────────────────────────────────────────────
   useEffect(() => {
     const key = imageId || imageName;
     if (stageRef.current) globalStageRefs.set(key, stageRef);
@@ -463,15 +421,26 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
     };
   }, [imageId, imageName, imageSrc, jobId, annotations, selectedId]);
 
+  // ─── Sync annotations to globalAnnotationRegistry ──────────────────────────
+  // This allows CommentsSection to look up annotations across all images
+  useEffect(() => {
+    const key = imageId || imageName;
+    // Store annotations with imageId embedded for cross-image lookups
+    const annotationsWithImageId = annotations.map((a) => ({
+      ...a,
+      imageId: key,
+    }));
+    globalAnnotationRegistry.set(key, annotationsWithImageId);
+    return () => {
+      globalAnnotationRegistry.delete(key);
+    };
+  }, [imageId, imageName, annotations]);
+
   // ─── Update global undo/redo/selection state ─────────────────────────────────
   useEffect(() => {
     setGlobalCanUndo(undoStack.length > 0);
     setGlobalCanRedo(redoStack.length > 0);
   }, [undoStack, redoStack]);
-
-  useEffect(() => {
-    setGlobalHasSelection(!!selectedId);
-  }, [selectedId]);
 
   // ─── Transformer attachment ──────────────────────────────────────────────────
   useEffect(() => {
@@ -480,8 +449,6 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
       const node = stageRef.current.findOne(`#${selectedId}`);
       if (node) {
         transformerRef.current.nodes([node]);
-
-        // Disable rotation and correctly size text box if needed
         transformerRef.current.getLayer()?.batchDraw();
         return;
       }
@@ -489,16 +456,6 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
     transformerRef.current.nodes([]);
     transformerRef.current.getLayer()?.batchDraw();
   }, [selectedId, activeTool, annotations]);
-
-  // ─── Annotation history helpers ──────────────────────────────────────────────
-  const pushHistory = useCallback(
-    (newAnnotations) => {
-      setUndoStack((prev) => [...prev, annotations]);
-      setRedoStack([]);
-      setAnnotations(newAnnotations);
-    },
-    [annotations]
-  );
 
   const handleUndo = useCallback(() => {
     if (undoStack.length === 0) return;
@@ -518,24 +475,11 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
     setSelectedId(null);
   }, [redoStack, annotations]);
 
-  const handleDelete = useCallback(() => {
-    if (!selectedId) return;
-    pushHistory(annotations.filter((a) => a.id !== selectedId));
-    setSelectedId(null);
-  }, [annotations, selectedId, pushHistory]);
-
-  const handleClearAll = useCallback(() => {
-    pushHistory([]);
-    setSelectedId(null);
-  }, [pushHistory]);
-
   // ─── Global command listener ─────────────────────────────────────────────────
   useEffect(() => {
     const handleCmd = (e) => {
       if (e.type === "undo") handleUndo();
       if (e.type === "redo") handleRedo();
-      if (e.type === "delete") handleDelete();
-      if (e.type === "clearAll") handleClearAll();
       if (e.type === "cancel") {
         setAnnotations([]);
         setUndoStack([]);
@@ -546,17 +490,13 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
     };
     annotationCommands.addEventListener("undo", handleCmd);
     annotationCommands.addEventListener("redo", handleCmd);
-    annotationCommands.addEventListener("delete", handleCmd);
-    annotationCommands.addEventListener("clearAll", handleCmd);
     annotationCommands.addEventListener("cancel", handleCmd);
     return () => {
       annotationCommands.removeEventListener("undo", handleCmd);
       annotationCommands.removeEventListener("redo", handleCmd);
-      annotationCommands.removeEventListener("delete", handleCmd);
-      annotationCommands.removeEventListener("clearAll", handleCmd);
       annotationCommands.removeEventListener("cancel", handleCmd);
     };
-  }, [handleUndo, handleRedo, handleDelete, handleClearAll]);
+  }, [handleUndo, handleRedo]);
 
   // ─── Keyboard shortcuts ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -570,12 +510,11 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
         e.preventDefault();
         handleRedo();
       }
-      if (e.key === "Delete" || e.key === "Backspace") handleDelete();
       if (e.key === "Escape") setActiveTool("select");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isAnnotating, handleUndo, handleRedo, handleDelete, setActiveTool]);
+  }, [isAnnotating, handleUndo, handleRedo, setActiveTool]);
 
   // ─── Image fitting ───────────────────────────────────────────────────────────
   const getImageLayout = () => {
@@ -617,19 +556,22 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
     // If clicking on a shape while in select mode – let shape's onClick handle it
     if (activeTool === "select") {
       const clickedOnStage = e.target === e.target.getStage();
-      if (clickedOnStage) setSelectedId(null);
-      return;
-    }
-
-    if (activeTool === "text") {
-      const pos = getStagePos(e);
-      setTextPending({ x: pos.x, y: pos.y });
+      if (clickedOnStage) {
+        setSelectedId(null);
+        setGlobalSelectedAnn(null);
+        setGlobalHighlightedAnn(null);
+      }
       return;
     }
 
     e.evt.preventDefault();
     const pos = getStagePos(e);
     const isPath = activeTool === "freehand" || activeTool === "highlight";
+
+    // When starting a new drawing, clear any previously viewed/highlighted annotation
+    setSelectedId(null);
+    setGlobalSelectedAnn(null);
+    setGlobalHighlightedAnn(null);
 
     setDrawState({
       startX: pos.x,
@@ -642,7 +584,7 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
 
   const handleStageMouseMove = (e) => {
     if (!isAnnotating || !drawState) return;
-    if (activeTool === "select" || activeTool === "text") return;
+    if (activeTool === "select") return;
 
     const pos = getStagePos(e);
     const isPath = activeTool === "freehand" || activeTool === "highlight";
@@ -661,11 +603,11 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
 
   const handleStageMouseUp = () => {
     if (!isAnnotating || !drawState) return;
-    if (activeTool === "select" || activeTool === "text") return;
+    if (activeTool === "select") return;
 
     const { startX, startY, currentX, currentY, points } = drawState;
     const id = uid();
-    const base = { id, tool: activeTool, color, lineWidth, opacity };
+    const base = { id, imageId, tool: activeTool, color, lineWidth, opacity };
     let newAnn = null;
 
     switch (activeTool) {
@@ -721,6 +663,8 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
       setRedoStack([]);
       setAnnotations(newList);
       setSelectedId(newAnn.id);
+      // Broadcast selection globally so comments composer can link to it
+      setGlobalSelectedAnn(newAnn.id);
     }
     setDrawState(null);
   };
@@ -740,9 +684,6 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
         } else if (a.tool === "ellipse") {
           newData.cx = node.x();
           newData.cy = node.y();
-        } else if (a.tool === "text") {
-          newData.x = node.x();
-          newData.y = node.y();
         } else if (
           a.tool === "freehand" ||
           a.tool === "highlight" ||
@@ -800,28 +741,6 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
           newData.ry = Math.max(4, Math.abs(node.radiusY() * scaleY));
           node.radiusX(newData.rx);
           node.radiusY(newData.ry);
-        } else if (a.tool === "text") {
-          newData.x = node.x();
-          newData.y = node.y();
-
-          const draggedHeight = node.height() * scaleY;
-          const newWidth = Math.max(node.width() * scaleX, 20);
-
-          node.setAttr("height", undefined);
-          node.width(newWidth);
-
-          const requiredHeight = node.height();
-          const finalHeight = Math.max(draggedHeight, requiredHeight);
-
-          node.setAttrs({
-            width: newWidth,
-            height: finalHeight,
-            scaleX: 1,
-            scaleY: 1,
-          });
-
-          newData.width = newWidth;
-          newData.height = finalHeight;
         }
         node.x(newData.x || newData.cx || 0);
         node.y(newData.y || newData.cy || 0);
@@ -833,30 +752,6 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
     });
   }, []);
 
-  // ─── Text confirm ─────────────────────────────────────────────────────────────
-
-  const handleTextConfirm = (text) => {
-    if (!text || !textPending) {
-      setTextPending(null);
-      return;
-    }
-    const newAnn = {
-      id: uid(),
-      tool: "text",
-      color,
-      lineWidth,
-      opacity,
-      data: { x: textPending.x, y: textPending.y, text, fontSize: 18 },
-    };
-    const newList = [...annotations, newAnn];
-    setUndoStack((prev) => [...prev, annotations]);
-    setRedoStack([]);
-    setAnnotations(newList);
-    setSelectedId(newAnn.id);
-    setTextPending(null);
-    setActiveTool("select");
-  };
-
   // ─── Cursor ──────────────────────────────────────────────────────────────────
   const cursorMap = {
     select: "default",
@@ -866,7 +761,6 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
     highlight: "crosshair",
     line: "crosshair",
     arrow: "crosshair",
-    text: "text",
   };
 
   const imgCursor = isAnnotating
@@ -915,24 +809,40 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
 
           {/* Annotation Layer */}
           <Layer>
-            {annotations.map((ann) => (
-              <AnnotationShape
-                key={ann.id}
-                ann={ann}
-                isSelected={ann.id === selectedId && activeTool === "select"}
-                onSelect={(id) => {
-                  if (activeTool !== "select") return;
-                  setSelectedId(id);
-                }}
-                onDragEnd={handleDragEnd}
-                onTransformEnd={handleTransformEnd}
-                isAnnotating={isAnnotating}
-                activeTool={activeTool}
-              />
-            ))}
+            {annotations
+              .filter(
+                (ann) =>
+                  ann.id === selectedId || ann.id === highlightedAnnotationId
+              )
+              .map((ann) => (
+                <React.Fragment key={ann.id}>
+                  {/* Highlight ring for comment-linked selection */}
+                  <HighlightRing
+                    ann={ann}
+                    isHighlighted={ann.id === highlightedAnnotationId}
+                  />
+                  <AnnotationShape
+                    ann={ann}
+                    isSelected={
+                      ann.id === selectedId && activeTool === "select"
+                    }
+                    onSelect={(id) => {
+                      if (activeTool !== "select") return;
+                      setSelectedId(id);
+                      setGlobalSelectedAnn(id);
+                      // Clear comment highlight when user manually selects an annotation
+                      setGlobalHighlightedAnn(null);
+                    }}
+                    onDragEnd={handleDragEnd}
+                    onTransformEnd={handleTransformEnd}
+                    isAnnotating={isAnnotating}
+                    activeTool={activeTool}
+                  />
+                </React.Fragment>
+              ))}
 
             {/* In-progress drawing preview */}
-            {drawState && activeTool !== "select" && activeTool !== "text" && (
+            {drawState && activeTool !== "select" && (
               <InProgressShape
                 state={drawState}
                 tool={activeTool}
@@ -946,32 +856,15 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
               <Transformer
                 ref={transformerRef}
                 boundBoxFunc={(oldBox, newBox) => {
-                  if (activeTool === "select" && selectedId) {
-                    const node = stageRef.current?.findOne(`#${selectedId}`);
-                    if (node && node.name() === "textNode") {
-                      if (newBox.width < 20) {
-                        return oldBox;
-                      }
-                    }
-                  }
                   if (newBox.width < 5 || newBox.height < 5) return oldBox;
                   return newBox;
                 }}
-                enabledAnchors={
-                  stageRef.current?.findOne(`#${selectedId}`)?.name() ===
-                  "textNode"
-                    ? [
-                        "top-left",
-                        "top-right",
-                        "bottom-left",
-                        "bottom-right",
-                        "middle-left",
-                        "middle-right",
-                        "top-center",
-                        "bottom-center",
-                      ]
-                    : ["top-left", "top-right", "bottom-left", "bottom-right"]
-                }
+                enabledAnchors={[
+                  "top-left",
+                  "top-right",
+                  "bottom-left",
+                  "bottom-right",
+                ]}
                 rotateEnabled={false}
               />
             )}
@@ -1006,15 +899,6 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
         >
           {imageName}
         </Box>
-      )}
-
-      {/* Text input popup */}
-      {textPending && (
-        <TextInputPopover
-          pos={{ x: textPending.x, y: Math.max(0, textPending.y - 40) }}
-          onConfirm={handleTextConfirm}
-          onCancel={() => setTextPending(null)}
-        />
       )}
     </Box>
   );

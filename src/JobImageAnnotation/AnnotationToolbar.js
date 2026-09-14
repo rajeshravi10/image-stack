@@ -4,7 +4,6 @@ import {
   IconButton,
   Tooltip,
   Divider,
-  Button,
   Popover,
   Slider,
   Typography,
@@ -16,15 +15,9 @@ import {
   Edit,
   HorizontalRule,
   East,
-  TextFields,
   Highlight,
   Undo,
   Redo,
-  DeleteOutline,
-  DeleteSweep,
-  Close,
-  FileDownload,
-  Chat,
 } from "@mui/icons-material";
 
 const TOOLS = [
@@ -38,7 +31,6 @@ const TOOLS = [
   { name: "freehand", Icon: Edit, tooltip: "Freehand Pen [P]" },
   { name: "line", Icon: HorizontalRule, tooltip: "Line [L]" },
   { name: "arrow", Icon: East, tooltip: "Arrow [A]" },
-  { name: "text", Icon: TextFields, tooltip: "Text [T]" },
   { name: "highlight", Icon: Highlight, tooltip: "Highlighter [H]" },
 ];
 
@@ -61,14 +53,8 @@ const PRESET_COLORS = [
  * @param {Function} props.onToolChange
  * @param {Function} props.onUndo
  * @param {Function} props.onRedo
- * @param {Function} props.onDelete
- * @param {Function} props.onClearAll
  * @param {boolean}  props.canUndo
  * @param {boolean}  props.canRedo
- * @param {boolean}  props.hasSelection
- * @param {Function} props.onExport
- * @param {Function} props.onAddToComment
- * @param {boolean}  props.canAddToComment
  * @param {Function} props.onCancel
  * @param {Object}   props.toolSettings       – { color, lineWidth, opacity }
  * @param {Function} props.onToolSettingsChange – (settings) => void
@@ -78,14 +64,8 @@ const AnnotationToolbar = ({
   onToolChange,
   onUndo,
   onRedo,
-  onDelete,
-  onClearAll,
   canUndo,
   canRedo,
-  hasSelection,
-  onExport,
-  onAddToComment,
-  canAddToComment,
   onCancel,
   toolSettings = {},
   onToolSettingsChange,
@@ -190,98 +170,6 @@ const AnnotationToolbar = ({
             <Redo sx={{ fontSize: 18 }} />
           </IconButton>
         </span>
-      </Tooltip>
-
-      <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
-
-      {/* Delete / Clear */}
-      <Tooltip title="Delete selected (Del)" placement="bottom">
-        <span>
-          <IconButton
-            size="small"
-            onClick={onDelete}
-            disabled={!hasSelection}
-            sx={{ borderRadius: 1 }}
-          >
-            <DeleteOutline
-              sx={{ fontSize: 18, color: hasSelection ? "#f44336" : undefined }}
-            />
-          </IconButton>
-        </span>
-      </Tooltip>
-
-      <Tooltip title="Clear all annotations" placement="bottom">
-        <IconButton size="small" onClick={onClearAll} sx={{ borderRadius: 1 }}>
-          <DeleteSweep sx={{ fontSize: 18, color: "#f44336" }} />
-        </IconButton>
-      </Tooltip>
-
-      <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
-
-      {/* Export */}
-      <Tooltip title="Export preview as PNG" placement="bottom">
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<FileDownload sx={{ fontSize: 15 }} />}
-          onClick={onExport}
-          sx={{
-            color: "#2680EB",
-            borderColor: "#2680EB",
-            "&:hover": { bgcolor: "#f0f7ff", borderColor: "#1a6dd4" },
-            textTransform: "none",
-            fontSize: 12,
-            px: 1,
-            py: 0.5,
-            whiteSpace: "nowrap",
-          }}
-        >
-          Export
-        </Button>
-      </Tooltip>
-
-      {/* Add to Comment */}
-      <Tooltip
-        title={
-          canAddToComment
-            ? "Add annotated image to comment"
-            : "Switch to Comments tab first"
-        }
-        placement="bottom"
-      >
-        <span>
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<Chat sx={{ fontSize: 15 }} />}
-            onClick={canAddToComment ? onAddToComment : undefined}
-            disabled={!canAddToComment}
-            sx={{
-              textTransform: "none",
-              fontSize: 12,
-              px: 1,
-              py: 0.5,
-              background: canAddToComment ? "#1E7D32" : undefined,
-              "&:hover": {
-                background: canAddToComment ? "#166527" : undefined,
-              },
-              whiteSpace: "nowrap",
-            }}
-          >
-            Add to Comment
-          </Button>
-        </span>
-      </Tooltip>
-
-      {/* Close */}
-      <Tooltip title="Exit annotation mode" placement="bottom">
-        <IconButton
-          size="small"
-          onClick={onCancel}
-          sx={{ borderRadius: 1, ml: 0.25 }}
-        >
-          <Close sx={{ fontSize: 18, color: "#666" }} />
-        </IconButton>
       </Tooltip>
 
       {/* ── Settings Popover ─────────────────────────────────────────────── */}

@@ -1,46 +1,42 @@
 /**
- * @typedef {'select'|'rectangle'|'ellipse'|'polygon'|'freehand'|'line'|'arrow'|'text'} AnnotationTool
+ * @typedef {'select'|'rectangle'|'ellipse'|'polygon'|'freehand'|'line'|'arrow'|'highlight'} AnnotationTool
  */
 
 /**
  * @typedef {Object} CustomAnnotation
- * @property {string} id          - Unique identifier
+ * @property {string} id          - Unique identifier (stable across session)
  * @property {AnnotationTool} tool - Tool used to create this annotation
+ * @property {string} imageId     - ID of the image this annotation belongs to
  * @property {Object} data        - Tool-specific drawing data (see below)
- * @property {string} [text]      - Optional label / text content
  * @property {string} color       - Stroke colour (hex)
  * @property {number} lineWidth   - Stroke width in display pixels
+ * @property {number} [opacity]   - Opacity (0–1)
+ * @property {string} [versionId] - Optional version ID for future version overlay support
+ * @property {'open'|'resolved'} [status] - Optional annotation resolution status
  */
 
 /**
- * Custom annotation data shapes:
+ * Custom annotation data shapes (stored in stage/pixel coordinates):
  *
- * rectangle : { x, y, width, height }   – coords in IMAGE-NATURAL px
- * ellipse   : { cx, cy, rx, ry }        – coords in IMAGE-NATURAL px
- * polygon   : { points: [{x,y}] }       – coords in IMAGE-NATURAL px
- * freehand  : { points: [{x,y}] }       – coords in IMAGE-NATURAL px
- * line      : { x1, y1, x2, y2 }        – coords in IMAGE-NATURAL px
- * arrow     : { x1, y1, x2, y2 }        – coords in IMAGE-NATURAL px
- * text      : { x, y, text }            – coords in IMAGE-NATURAL px
- */
-
-/**
- * @typedef {Object} CommentAttachment
- * @property {string}  id    - Unique id
- * @property {'image'} type  - Always 'image' for this POC
- * @property {string}  name  - File name
- * @property {string}  url   - blob: URL for preview
- * @property {File}    [file] - Underlying File object (for future API calls)
+ * rectangle : { x, y, width, height }
+ * ellipse   : { cx, cy, rx, ry }
+ * polygon   : { points: [{x,y}] }
+ * freehand  : { points: [{x,y}] }
+ * highlight : { points: [{x,y}] }
+ * line      : { x1, y1, x2, y2 }
+ * arrow     : { x1, y1, x2, y2 }
  */
 
 /**
  * @typedef {Object} JobComment
- * @property {string}             id            - Unique id
- * @property {string}             text          - Comment body
- * @property {CommentAttachment[]} attachments  - Image attachments
- * @property {string}             [annotationId] - Link to the annotation session
- * @property {string}             createdAt      - ISO timestamp
- * @property {string}             author         - Display name
+ * @property {string}  id            - Unique id
+ * @property {string}  text          - Comment body
+ * @property {string}  [annotationId] - Link to an annotation (annotation.id)
+ * @property {string}  [imageId]     - Image the linked annotation belongs to
+ * @property {string}  [versionId]   - Optional version ID for future version support
+ * @property {string}  createdAt     - ISO timestamp
+ * @property {string}  author        - Display name
+ * @property {'open'|'resolved'} [status] - Optional resolution status
  */
 
 const types = {};
