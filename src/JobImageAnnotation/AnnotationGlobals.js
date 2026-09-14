@@ -16,8 +16,11 @@ let _selectedAnnotationId = null;
 // Selected comment ID (set when a comment card is clicked)
 let _selectedCommentId = null;
 
-// Highlighted annotation ID (for temporary glow effect from comment click)
-let _highlightedAnnotationId = null;
+// Highlighted annotation IDs (restored from comment click)
+let _highlightedAnnotationIds = [];
+
+// Draft annotations (created but not yet submitted in a comment)
+let _draftAnnotationIds = [];
 
 // Global registry: imageId → annotation[] (each JobImageAnnotation instance syncs here)
 // This allows the comments panel to look up annotations across all images
@@ -82,8 +85,13 @@ export const setGlobalSelectedCommentId = (id) => {
   notify();
 };
 
-export const setGlobalHighlightedAnnotationId = (id) => {
-  _highlightedAnnotationId = id;
+export const setGlobalHighlightedAnnotationIds = (ids) => {
+  _highlightedAnnotationIds = ids || [];
+  notify();
+};
+
+export const setGlobalDraftAnnotationIds = (ids) => {
+  _draftAnnotationIds = ids || [];
   notify();
 };
 
@@ -112,8 +120,10 @@ export const useGlobalAnnotationMode = () => {
     setSelectedAnnotationId: setGlobalSelectedAnnotationId,
     selectedCommentId: _selectedCommentId,
     setSelectedCommentId: setGlobalSelectedCommentId,
-    highlightedAnnotationId: _highlightedAnnotationId,
-    setHighlightedAnnotationId: setGlobalHighlightedAnnotationId,
+    highlightedAnnotationIds: _highlightedAnnotationIds,
+    setHighlightedAnnotationIds: setGlobalHighlightedAnnotationIds,
+    draftAnnotationIds: _draftAnnotationIds,
+    setDraftAnnotationIds: setGlobalDraftAnnotationIds,
   };
 };
 

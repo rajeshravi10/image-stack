@@ -26,7 +26,7 @@ import { getStaticJobMapping } from "./jobImageMapping";
 import JobImageAnnotation from "./JobImageAnnotation/JobImageAnnotation";
 import {
   setGlobalSelectedAnnotationId,
-  setGlobalHighlightedAnnotationId,
+  setGlobalHighlightedAnnotationIds,
 } from "./JobImageAnnotation/AnnotationGlobals";
 
 const DragDropPOC = ({ jobData }) => {
@@ -158,7 +158,7 @@ const DragDropPOC = ({ jobData }) => {
 
     // MANUAL IMAGE CHANGE MUST RESET DISPLAYED ANNOTATION
     setGlobalSelectedAnnotationId(null);
-    setGlobalHighlightedAnnotationId(null);
+    setGlobalHighlightedAnnotationIds([]);
 
     const dragged = dragItemRef.current;
     if (!dragged) return;
@@ -170,7 +170,7 @@ const DragDropPOC = ({ jobData }) => {
   const onThumbClick = (thumb) => {
     // MANUAL IMAGE CHANGE MUST RESET DISPLAYED ANNOTATION
     setGlobalSelectedAnnotationId(null);
-    setGlobalHighlightedAnnotationId(null);
+    setGlobalHighlightedAnnotationIds([]);
 
     setPreviewId(thumb.id);
   };

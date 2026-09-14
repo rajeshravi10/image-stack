@@ -104,8 +104,12 @@ function AnnotationShape({
   const commonProps = {
     id: ann.id,
     draggable: isAnnotating && activeTool === "select",
-    onClick: () => isAnnotating && onSelect(ann.id),
-    onTap: () => isAnnotating && onSelect(ann.id),
+    onClick: () => isAnnotating && activeTool === "select" && onSelect(ann.id),
+    onTap: () => isAnnotating && activeTool === "select" && onSelect(ann.id),
+    onDragStart: () =>
+      isAnnotating && activeTool === "select" && onSelect(ann.id),
+    onMouseDown: () =>
+      isAnnotating && activeTool === "select" && onSelect(ann.id),
     onDragEnd: (e) => onDragEnd(ann.id, e),
     onTransformEnd: (e) => onTransformEnd(ann.id, e),
   };
@@ -322,9 +326,11 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
     setActiveTool,
     toolSettings,
     selectedAnnotationId: globalSelectedAnnotationId,
-    highlightedAnnotationId,
+    highlightedAnnotationIds,
+    draftAnnotationIds,
     setSelectedAnnotationId: setGlobalSelectedAnn,
-    setHighlightedAnnotationId: setGlobalHighlightedAnn,
+    setHighlightedAnnotationIds: setGlobalHighlightedAnnIds,
+    setDraftAnnotationIds: setGlobalDraftAnnIds,
   } = useGlobalAnnotationMode();
 
   const color = toolSettings?.color || "#FF3B30";
@@ -575,7 +581,7 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
       if (clickedOnStage) {
         setSelectedId(null);
         setGlobalSelectedAnn(null);
-        setGlobalHighlightedAnn(null);
+        setGlobalHighlightedAnnIds([]);
       }
       return;
     }
@@ -587,7 +593,8 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
     // When starting a new drawing, clear any previously viewed/highlighted annotation
     setSelectedId(null);
     setGlobalSelectedAnn(null);
-    setGlobalHighlightedAnn(null);
+    setGlobalHighlightedAnnIds([]);
+    // Do NOT clear draftAnnotationIds here - we want them to accumulate!
 
     setDrawState({
       startX: pos.x,
@@ -680,8 +687,9 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
         return [...prev, newAnn];
       });
       setSelectedId(newAnn.id);
-      // Broadcast selection globally so comments composer can link to it
+      // Broadcast globally so comments composer can link to it
       setGlobalSelectedAnn(newAnn.id);
+      setGlobalDraftAnnIds([...draftAnnotationIds, newAnn.id]);
     }
     setDrawState(null);
   };
@@ -835,14 +843,16 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
             {annotations
               .filter(
                 (ann) =>
-                  ann.id === selectedId || ann.id === highlightedAnnotationId
+                  ann.id === selectedId ||
+                  draftAnnotationIds.includes(ann.id) ||
+                  highlightedAnnotationIds.includes(ann.id)
               )
               .map((ann) => (
                 <React.Fragment key={ann.id}>
                   {/* Highlight ring for comment-linked selection */}
                   <HighlightRing
                     ann={ann}
-                    isHighlighted={ann.id === highlightedAnnotationId}
+                    isHighlighted={highlightedAnnotationIds.includes(ann.id)}
                   />
                   <AnnotationShape
                     ann={ann}
@@ -854,7 +864,7 @@ const JobImageAnnotation = ({ imageSrc, imageName, jobId, imageId }) => {
                       setSelectedId(id);
                       setGlobalSelectedAnn(id);
                       // Clear comment highlight when user manually selects an annotation
-                      setGlobalHighlightedAnn(null);
+                      setGlobalHighlightedAnnIds([]);
                     }}
                     onDragEnd={handleDragEnd}
                     onTransformEnd={handleTransformEnd}

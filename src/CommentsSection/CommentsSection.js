@@ -26,7 +26,6 @@ import {
   globalAnnotationRegistry,
   setGlobalSelectedAnnotationId,
   setGlobalSelectedCommentId,
-  setGlobalHighlightedAnnotationId,
   setGlobalToolSettings,
   dispatchGridCommand,
   hydrateSessionState,
@@ -49,13 +48,17 @@ function findAnnotationById(annotationId) {
 // ─── Single comment display ───────────────────────────────────────────────────
 
 function CommentCard({ comment, isSelected, onClick, commentRef }) {
-  const linkedAnnotation =
-    comment.annotationId && comment.imageId
-      ? (globalAnnotationRegistry.get(comment.imageId) || []).find(
-          (a) => a.id === comment.annotationId
+  const linkedAnnotations = comment.annotationIds
+    ? comment.annotationIds
+        .map((id) =>
+          (globalAnnotationRegistry.get(comment.imageId) || []).find(
+            (a) => a.id === id
+          )
         )
-      : undefined;
-  const hasAnnotation = !!linkedAnnotation;
+        .filter(Boolean)
+    : [];
+
+  const hasAnnotation = linkedAnnotations.length > 0;
 
   return (
     <Box
@@ -129,25 +132,29 @@ function CommentCard({ comment, isSelected, onClick, commentRef }) {
 
 // ─── Composer ─────────────────────────────────────────────────────────────────
 
-function CommentComposer({ selectedAnnotationId, onSubmit }) {
+function CommentComposer({ draftAnnotationIds, onSubmit }) {
   const [text, setText] = useState("");
 
   const handleSubmit = () => {
     if (!text.trim()) return;
 
-    // Look up the annotation to get the imageId
+    // Look up the first valid annotation to get the imageId (assuming single-preview constraint)
     let imageId = null;
-    if (selectedAnnotationId) {
-      const ann = findAnnotationById(selectedAnnotationId);
-      if (ann) {
-        imageId = ann.imageId;
+    if (draftAnnotationIds && draftAnnotationIds.length > 0) {
+      for (const id of draftAnnotationIds) {
+        const ann = findAnnotationById(id);
+        if (ann) {
+          imageId = ann.imageId;
+          break;
+        }
       }
     }
 
     const comment = {
       id: uid(),
       text: text.trim(),
-      annotationId: selectedAnnotationId || null,
+      annotationIds:
+        draftAnnotationIds.length > 0 ? [...draftAnnotationIds] : [],
       imageId: imageId,
       versionId: null, // prepared for future version support
       createdAt: new Date().toISOString(),
@@ -173,7 +180,7 @@ function CommentComposer({ selectedAnnotationId, onSubmit }) {
     >
       {/* Text input row */}
       <Box sx={{ display: "flex", alignItems: "flex-end", gap: 1 }}>
-        {selectedAnnotationId && (
+        {draftAnnotationIds && draftAnnotationIds.length > 0 && (
           <Tooltip title="Attached to annotation" arrow placement="top">
             <Box
               sx={{
@@ -254,6 +261,9 @@ const CommentsSection = ({ jobId }) => {
 
   const {
     selectedAnnotationId,
+    draftAnnotationIds,
+    setDraftAnnotationIds,
+    setHighlightedAnnotationIds,
     activeTool,
     setActiveTool,
     canUndo,
@@ -274,17 +284,18 @@ const CommentsSection = ({ jobId }) => {
         return next;
       });
 
-      // After submitting a comment linked to an annotation, reset the
+      // After submitting a comment linked to annotations, reset the
       // active annotation selection so the next comment doesn't accidentally
-      // link to the same annotation.  The annotation itself stays rendered.
-      if (comment.annotationId) {
+      // link to the same annotations. The annotations themselves stay rendered.
+      if (comment.annotationIds && comment.annotationIds.length > 0) {
         setGlobalSelectedAnnotationId(null);
-        setGlobalHighlightedAnnotationId(null);
+        setHighlightedAnnotationIds([]);
+        setDraftAnnotationIds([]);
         setGlobalSelectedCommentId(null);
         setLocalSelectedCommentId(null);
       }
     },
-    [jobId]
+    [jobId, setHighlightedAnnotationIds, setDraftAnnotationIds]
   );
 
   // ── Auto-scroll to newest comment ─────────────────────────────────────────
@@ -293,47 +304,52 @@ const CommentsSection = ({ jobId }) => {
   }, [comments]);
 
   // ── Click comment → highlight annotation ──────────────────────────────────
-  const handleCommentClick = useCallback((comment) => {
-    // Mark that this selection change was triggered by a comment click
-    commentClickedRef.current = true;
+  const handleCommentClick = useCallback(
+    (comment) => {
+      // Mark that this selection change was triggered by a comment click
+      commentClickedRef.current = true;
 
-    setLocalSelectedCommentId(comment.id);
-    setGlobalSelectedCommentId(comment.id);
+      setLocalSelectedCommentId(comment.id);
+      setGlobalSelectedCommentId(comment.id);
 
-    // Normal comment
-    if (!comment.annotationId || !comment.imageId) {
-      setGlobalSelectedAnnotationId(null);
-      setGlobalHighlightedAnnotationId(null);
-      return;
-    }
-
-    // ALWAYS navigate using the comment's imageId explicitly as requested
-    window.dispatchEvent(
-      new CustomEvent("switch-image", { detail: comment.imageId })
-    );
-
-    // Delay checking and highlighting the annotation to allow preview to mount/change
-    setTimeout(() => {
-      // Clear editing box immediately
-      setGlobalSelectedAnnotationId(null);
-
-      // Find the exact annotation using comment.annotationId
-      const ann = findAnnotationById(comment.annotationId);
-      if (!ann) {
-        setGlobalHighlightedAnnotationId(null);
+      // Normal comment
+      if (
+        !comment.annotationIds ||
+        comment.annotationIds.length === 0 ||
+        !comment.imageId
+      ) {
+        setGlobalSelectedAnnotationId(null);
+        setHighlightedAnnotationIds([]);
         return;
       }
 
-      // Verify the found annotation's actual image matches the comment's declared image
-      if (ann.imageId !== comment.imageId) {
-        setGlobalHighlightedAnnotationId(null);
-        return;
-      }
+      // ALWAYS navigate using the comment's imageId explicitly as requested
+      window.dispatchEvent(
+        new CustomEvent("switch-image", { detail: comment.imageId })
+      );
 
-      // If securely matched, display the annotation visually
-      setGlobalHighlightedAnnotationId(ann.id);
-    }, 50);
-  }, []);
+      // Delay checking and highlighting the annotations to allow preview to mount/change
+      setTimeout(() => {
+        // Clear editing box immediately
+        setGlobalSelectedAnnotationId(null);
+
+        // Filter all physically existing annotations ensuring they belong to this exact image
+        const validIds = comment.annotationIds.filter((id) => {
+          const ann = findAnnotationById(id);
+          return ann && ann.imageId === comment.imageId;
+        });
+
+        if (validIds.length === 0) {
+          setHighlightedAnnotationIds([]);
+          return;
+        }
+
+        // If securely matched, display the annotations visually
+        setHighlightedAnnotationIds(validIds);
+      }, 50);
+    },
+    [setHighlightedAnnotationIds]
+  );
 
   // ── Click annotation → scroll to linked comment ──────────────────────────
   // Watch for changes in selectedAnnotationId (from annotation layer clicks)
@@ -353,7 +369,7 @@ const CommentsSection = ({ jobId }) => {
 
     // Find a comment linked to this annotation
     const linkedComment = comments.find(
-      (c) => c.annotationId === selectedAnnotationId
+      (c) => c.annotationIds && c.annotationIds.includes(selectedAnnotationId)
     );
 
     if (linkedComment) {
@@ -424,7 +440,7 @@ const CommentsSection = ({ jobId }) => {
 
       {/* Composer */}
       <CommentComposer
-        selectedAnnotationId={selectedAnnotationId}
+        draftAnnotationIds={draftAnnotationIds}
         onSubmit={handleSubmit}
       />
 
